@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark" />
+<meta name="theme-color" content="#0d1117" />
+<title>Auto Captions · Live Subtitles · Auto Language Detect · SRT/VTT (No API Key)</title>
+<meta name="description" content="Browser-only live captions with auto language detection, live caption translation and SRT/VTT export. No API key required." />
+
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --border:#30363d;
+    --text:#e6edf3; --muted:#8b949e;
+    --accent:#2f81f7; --green:#3fb950; --red:#f85149; --amber:#d29922;
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{min-height:100%}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,"Noto Sans",sans-serif;
+    color:var(--text);
+    background:
+      radial-gradient(1100px 560px at 8% -12%, rgba(47,129,247,.16), transparent 60%),
+      radial-gradient(900px 520px at 100% 0%, rgba(63,185,80,.12), transparent 55%),
+      var(--bg);
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- Header ---------- */
+  .topbar{
+    max-width:1080px;margin:0 auto;padding:22px 20px 6px;
+    display:flex;align-items:center;justify-content:space-between;
+    gap:18px;flex-wrap:wrap;
+  }
+  .brand{display:flex;align-items:center;gap:14px;min-width:250px}
+  .logo{
+    width:46px;height:46px;flex:0 0 46px;border-radius:12px;
+    display:grid;place-items:center;font-weight:800;font-size:15px;letter-spacing:.5px;color:#fff;
+    background:linear-gradient(145deg,#2f81f7,#1f6feb 55%,#3fb950);
+    box-shadow:0 8px 22px rgba(47,129,247,.35);
+  }
+  .brand h1{
+    margin:0;font-size:19px;letter-spacing:-.2px;
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  }
+  .brand .sub{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
+  .badge{
+    font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+    padding:3px 8px;border-radius:999px;color:#7ee787;
+    background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);
+  }
+  .gtranslate_wrapper{min-width:180px;display:flex;justify-content:flex-end;align-items:center}
+  .gt-fallback{
+    font-size:13px;color:#79c0ff;text-decoration:none;
+    border:1px solid var(--border);border-radius:9px;padding:7px 12px;background:#0d1117;
+  }
+  .gt-fallback:hover{border-color:var(--accent)}
+
+  /* ---------- Layout ---------- */
+  .wrap{max-width:1080px;margin:0 auto;padding:12px 20px 70px}
+  .card{
+    background:linear-gradient(180deg,#161b22,#12161d);
+    border:1px solid var(--border);border-radius:var(--radius);
+    padding:18px;margin-bottom:18px;
+    box-shadow:0 14px 34px rgba(0,0,0,.38);
+  }
+  .card h2{
+    margin:0 0 4px;font-size:13.5px;text-transform:uppercase;
+    letter-spacing:.8px;color:var(--muted);font-weight:700;
+  }
+  .card .desc{margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.55}
+
+  /* ---------- Stage ---------- */
+  .stage{
+    position:relative;width:100%;aspect-ratio:16/9;
+    background:#05070a;border:1px solid var(--border);border-radius:12px;
+    overflow:hidden;display:flex;align-items:center;justify-content:center;
+    transition:border-color .2s;
+  }
+  .stage:fullscreen{aspect-ratio:auto;width:100vw;height:100vh;border-radius:0;border:0}
+  .stage video{width:100%;height:100%;object-fit:contain;background:#000;display:block}
+  .stage video[hidden]{display:none}
+
+  .stage-placeholder{
+    display:flex;flex-direction:column;align-items:center;gap:16px;
+    color:#4d565f;user-select:none;text-align:center;padding:20px;
+  }
+  .stage-placeholder .icon{
+    width:66px;height:66px;border-radius:50%;
+    border:2px dashed #30363d;display:grid;place-items:center;
+    transition:border-color .25s, background .25s;
+  }
+  .stage-placeholder .icon svg{width:30px;height:30px;opacity:.65}
+  .stage-placeholder span{font-size:12.5px;letter-spacing:.4px}
+
+  .bars{display:flex;gap:5px;align-items:flex-end;height:44px}
+  .bars i{
+    display:block;width:6px;border-radius:3px;
+    background:linear-gradient(180deg,#2f81f7,#3fb950);
+    height:8px;opacity:.35;transition:opacity .2s;
+  }
+  .stage.listening .bars i{opacity:1;animation:bounce 1s infinite ease-in-out}
+  .stage.listening .bars i:nth-child(1){animation-delay:0s}
+  .stage.listening .bars i:nth-child(2){animation-delay:.12s}
+  .stage.listening .bars i:nth-child(3){animation-delay:.24s}
+  .stage.listening .bars i:nth-child(4){animation-delay:.36s}
+  .stage.listening .bars i:nth-child(5){animation-delay:.48s}
+  .stage.listening .stage-placeholder .icon{
+    border-color:rgba(63,185,80,.7);
+    background:rgba(63,185,80,.06);
+  }
+  @keyframes bounce{0%,100%{height:8px}50%{height:40px}}
+
+  .fs-btn{
+    position:absolute;top:10px;right:10px;z-index:5;
+    width:34px;height:34px;padding:0;justify-content:center;
+    background:rgba(13,17,23,.72);backdrop-filter:blur(4px);
+    border:1px solid var(--border);color:var(--text);border-radius:9px;cursor:pointer;
+    display:inline-flex;align-items:center;transition:background .15s,border-color .15s;
+  }
+  .fs-btn:hover{background:rgba(48,54,61,.95);border-color:#8b949e}
+  .fs-btn svg{width:16px;height:16px}
+
+  /* ---------- Subtitle overlay ---------- */
+  .subs{
+    position:absolute;left:0;right:0;bottom:0;
+    padding:80px 24px 26px;
+    background:linear-gradient(to top, rgba(0,0,0,.92), rgba(0,0,0,.55) 45%, transparent);
+    text-align:center;pointer-events:none;
+    display:flex;flex-direction:column;justify-content:flex-end;gap:6px;
+    min-height:42%;
+  }
+  .sub-line{
+    display:block;
+    font-size:clamp(17px,3.2vw,30px);
+    line-height:1.35;font-weight:800;letter-spacing:-.2px;color:#fff;
+    text-shadow:0 2px 12px rgba(0,0,0,.98), 0 0 4px rgba(0,0,0,.9);
+    word-break:break-word;transition:opacity .15s;
+  }
+  .sub-line[hidden]{display:none}
+  .sub-line.interim{
+    font-weight:500;font-style:italic;color:#c9d1d9;
+    text-shadow:0 2px 8px rgba(0,0,0,.9);min-height:1px;
+  }
+  .sub-line.placeholder{
+    font-weight:500;font-style:normal;color:#6e7681;
+    font-size:clamp(14px,2.1vw,18px);text-shadow:none;
+  }
+  .sub-line.trans{
+    font-size:clamp(14px,2.4vw,22px);font-weight:600;color:#79c0ff;
+    text-shadow:0 2px 10px rgba(0,0,0,.95);
+  }
+
+  /* ---------- Controls ---------- */
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
+  .row + .row{margin-top:14px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field > span{
+    font-size:11.5px;font-weight:700;letter-spacing:.5px;
+    text-transform:uppercase;color:var(--muted);
+  }
+  select, input[type="file"]{
+    background:#0d1117;color:var(--text);border:1px solid var(--border);
+    border-radius:10px;padding:9px 12px;font-size:14px;outline:none;min-width:230px;
+    font-family:inherit;
+  }
+  select:focus, input[type="file"]:focus{
+    border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,129,247,.22);
+  }
+  input[type="file"]{padding:7px 10px;font-size:13px;cursor:pointer}
+  input[type="file"]::file-selector-button{
+    background:#21262d;color:var(--text);border:1px solid var(--border);
+    border-radius:8px;padding:6px 12px;margin-right:10px;cursor:pointer;font-weight:600;
+    font-family:inherit;
+  }
+
+  .btn{
+    appearance:none;border:1px solid var(--border);background:#21262d;color:var(--text);
+    padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:650;cursor:pointer;
+    transition:background .15s,border-color .15s,transform .08s,filter .15s;
+    display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
+    font-family:inherit;
+  }
+  .btn:hover:not(:disabled){background:#30363d;border-color:#8b949e}
+  .btn:active:not(:disabled){transform:translateY(1px)}
+  .btn:disabled{opacity:.4;cursor:not-allowed}
+  .btn.primary{
+    background:linear-gradient(180deg,#2f81f7,#1f6feb);
+    border-color:#1f6feb;color:#fff;
+    box-shadow:0 6px 18px rgba(47,129,247,.28);
+  }
+  .btn.primary:hover:not(:disabled){filter:brightness(1.12)}
+  .btn.stop{background:linear-gradient(180deg,#f85149,#da3633);border-color:#da3633;color:#fff}
+  .btn.stop:hover:not(:disabled){filter:brightness(1.1)}
+  .btn.ghost{background:transparent}
+
+  .status{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:650;
+    background:#0d1117;border:1px solid var(--border);color:var(--muted);
+    min-height:38px;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:#484f58;flex:0 0 9px}
+  .status.listening{color:#7ee787;border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.08)}
+  .status.listening .dot{background:var(--green);animation:pulse 1.15s infinite}
+  .status.error{color:#ff7b72;border-color:rgba(248,81,73,.45);background:rgba(248,81,73,.08)}
+  .status.error .dot{background:var(--red)}
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(63,185,80,.55)}
+    70%{box-shadow:0 0 0 9px rgba(63,185,80,0)}
+    100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}
+  }
+
+  /* ---------- Auto-detect chip ---------- */
+  .chip{
+    display:inline-flex;align-items:center;gap:8px;
+    padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:650;
+    background:rgba(47,129,247,.12);border:1px solid rgba(47,129,247,.45);
+    color:#79c0ff;cursor:pointer;min-height:38px;font-family:inherit;
+    transition:background .15s,border-color .15s;
+    max-width:100%;
+  }
+  .chip:hover{background:rgba(47,129,247,.2);border-color:var(--accent)}
+  .chip[hidden]{display:none}
+  .chip.busy{background:rgba(210,153,34,.14);border-color:rgba(210,153,34,.5);color:#ffd8a8}
+
+  /* ---------- Transcript ---------- */
+  .transcript{
+    margin-top:14px;max-height:320px;overflow-y:auto;
+    border:1px solid var(--border);border-radius:12px;
+    background:#0b0f14;padding:8px;
+  }
+  .transcript::-webkit-scrollbar{width:10px}
+  .transcript::-webkit-scrollbar-thumb{background:#30363d;border-radius:8px;border:2px solid #0b0f14}
+  .seg{
+    display:flex;gap:12px;padding:9px 11px;border-radius:9px;
+    font-size:14.5px;line-height:1.5;align-items:flex-start;
+  }
+  .seg:nth-child(odd){background:rgba(255,255,255,.022)}
+  .seg-time{
+    flex:0 0 auto;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11.5px;color:var(--accent);padding-top:3px;
+    white-space:nowrap;letter-spacing:-.2px;
+  }
+  .seg-text{flex:1 1 auto;word-break:break-word;display:flex;flex-direction:column;gap:2px}
+  .seg-tr{color:#79c0ff;font-size:13px;opacity:.95}
+  .seg-tr[hidden]{display:none}
+  .empty{color:#565f6b;font-size:13.5px;padding:22px 12px;text-align:center}
+
+  .meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
+  .meta b{color:var(--text);font-weight:650}
+
+  .hint{margin:12px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
+  .hint code{
+    background:#0d1117;border:1px solid var(--border);border-radius:5px;
+    padding:1px 6px;font-size:12px;color:#79c0ff;
+  }
+  .hint strong{color:#c9d1d9}
+
+  .warnbox{
+    display:none;margin-bottom:18px;padding:13px 16px;border-radius:12px;
+    font-size:13.5px;line-height:1.55;color:#ffd8a8;
+    background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.4);
+  }
+  .warnbox.show{display:block}
+  .warnbox code{background:rgba(0,0,0,.35);border-radius:4px;padding:1px 5px}
+
+  footer{
+    max-width:1080px;margin:0 auto;padding:0 20px 40px;
+    color:#565f6b;font-size:12px;line-height:1.6;
+  }
+  @media (max-width:620px){
+    .brand h1{font-size:17px}
+    select, input[type="file"]{min-width:170px}
+    .subs{padding:60px 14px 18px}
+  }
+</style>
+</head>
+<body>
+
+<!-- ================= HEADER + GTRANSLATE ================= -->
+<header class="topbar">
+  <div class="brand">
+    <div class="logo">CC</div>
+    <div>
+      <h1>Auto Captions <span class="badge">No API Key</span></h1>
+      <p class="sub">Live subtitles · auto language detect · SRT / VTT export</p>
+    </div>
+  </div>
+  <div class="gtranslate_wrapper" id="gtWrapper"></div>
+</header>
+
+<!-- ================= MAIN ================= -->
+<main class="wrap">
+
+  <div id="supportWarn" class="warnbox">
+    <strong>Browser not supported.</strong> This tool uses the Web Speech API.
+    Please open it in <b>Google Chrome</b>, <b>Microsoft Edge</b> or <b>Safari</b>.
+    (Firefox has not implemented <code>SpeechRecognition</code> yet.)
+  </div>
+
+  <div id="secureWarn" class="warnbox">
+    <strong>Microphone blocked.</strong> Speech recognition requires a
+    <b>secure context</b>: <code>https://</code> or <code>http://localhost</code>.
+    Opening the file with <code>file://</code> won't work in most browsers.
+  </div>
+
+  <!-- STAGE + SUBTITLES -->
+  <section class="card">
+    <h2>Subtitle stage</h2>
+    <p class="desc">Live subtitles render here. Speak into the mic, or load a media file below and play it out loud.</p>
+
+    <div class="stage" id="stage">
+      <div class="stage-placeholder" id="stagePlaceholder">
+        <div class="icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+            <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
+            <line x1="12" y1="19" x2="12" y2="23"/>
+            <line x1="8" y1="23" x2="16" y2="23"/>
+          </svg>
+        </div>
+        <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+        <span id="phText">Press “Start listening” and begin speaking…</span>
+      </div>
+
+      <video id="player" controls playsinline preload="metadata" hidden></video>
+
+      <button class="fs-btn" id="fsBtn" type="button" title="Fullscreen" aria-label="Toggle fullscreen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
+          <path d="M16 3h3a2 2 0 0 1 2 2v3"/>
+          <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+          <path d="M8 21H5a2 2 0 0 1-2-2v-3"/>
+        </svg>
+      </button>
+
+      <div class="subs" id="subs">
+        <span class="sub-line placeholder" id="subFinal">Press “Start listening” and begin speaking…</span>
+        <span class="sub-line trans" id="subTrans" hidden></span>
+        <span class="sub-line interim" id="subInterim"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONTROLS -->
+  <section class="card">
+    <h2>Controls</h2>
+    <p class="desc">Leave it on <b>Auto detect</b> — the engine starts with your browser language, then scans and switches itself when it recognises a different language.</p>
+
+    <div class="row">
+      <label class="field">
+        <span>Recognition language</span>
+        <select id="lang">
+          <option value="auto" selected>🔍 Auto detect (best effort)</option>
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="en-IN">English (India)</option>
+          <option value="en-AU">English (Australia)</option>
+          <option value="hi-IN">हिन्दी — Hindi</option>
+          <option value="bn-IN">বাংলা — Bengali</option>
+          <option value="mr-IN">मराठी — Marathi</option>
+          <option value="ta-IN">தமிழ் — Tamil</option>
+          <option value="te-IN">తెలుగు — Telugu</option>
+          <option value="gu-IN">ગુજરાતી — Gujarati</option>
+          <option value="kn-IN">ಕನ್ನಡ — Kannada</option>
+          <option value="ml-IN">മലയാളം — Malayalam</option>
+          <option value="pa-IN">ਪੰਜਾਬੀ — Punjabi</option>
+          <option value="ur-PK">اردو — Urdu</option>
+          <option value="es-ES">Español — Spanish</option>
+          <option value="fr-FR">Français — French</option>
+          <option value="de-DE">Deutsch — German</option>
+          <option value="it-IT">Italiano — Italian</option>
+          <option value="pt-BR">Português (Brasil)</option>
+          <option value="ru-RU">Русский — Russian</option>
+          <option value="nl-NL">Nederlands — Dutch</option>
+          <option value="pl-PL">Polski — Polish</option>
+          <option value="tr-TR">Türkçe — Turkish</option>
+          <option value="ar-SA">العربية — Arabic</option>
+          <option value="fa-IR">فارسی — Persian</option>
+          <option value="he-IL">עברית — Hebrew</option>
+          <option value="el-GR">Ελληνικά — Greek</option>
+          <option value="sv-SE">Svenska — Swedish</option>
+          <option value="uk-UA">Українська — Ukrainian</option>
+          <option value="id-ID">Bahasa Indonesia</option>
+          <option value="ms-MY">Bahasa Melayu</option>
+          <option value="fil-PH">Filipino</option>
+          <option value="th-TH">ไทย — Thai</option>
+          <option value="vi-VN">Tiếng Việt — Vietnamese</option>
+          <option value="ja-JP">日本語 — Japanese</option>
+          <option value="ko-KR">한국어 — Korean</option>
+          <option value="zh-CN">中文（简体）— Chinese</option>
+          <option value="zh-TW">中文（繁體）— Chinese</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Caption translation</span>
+        <select id="trLang">
+          <option value="" selected>Off — original only</option>
+          <option value="auto">🔍 Auto — match page language</option>
+          <option value="en">English</option>
+          <option value="es">Español</option>
+          <option value="fr">Français</option>
+          <option value="de">Deutsch</option>
+          <option value="it">Italiano</option>
+          <option value="pt">Português</option>
+          <option value="ru">Русский</option>
+          <option value="hi">हिन्दी</option>
+          <option value="bn">বাংলা</option>
+          <option value="ta">தமிழ்</option>
+          <option value="te">తెలుగు</option>
+          <option value="mr">मराठी</option>
+          <option value="gu">ગુજરાતી</option>
+          <option value="kn">ಕನ್ನಡ</option>
+          <option value="ml">മലയാളം</option>
+          <option value="pa">ਪੰਜਾਬੀ</option>
+          <option value="ur">اردو</option>
+          <option value="ar">العربية</option>
+          <option value="fa">فارسی</option>
+          <option value="tr">Türkçe</option>
+          <option value="id">Bahasa Indonesia</option>
+          <option value="vi">Tiếng Việt</option>
+          <option value="th">ไทย</option>
+          <option value="ja">日本語</option>
+          <option value="ko">한국어</option>
+          <option value="zh-CN">中文（简体）</option>
+          <option value="zh-TW">中文（繁體）</option>
+          <option value="nl">Nederlands</option>
+          <option value="pl">Polski</option>
+          <option value="uk">Українська</option>
+          <option value="sv">Svenska</option>
+          <option value="el">Ελληνικά</option>
+          <option value="he">עברית</option>
+        </select>
+      </label>
+
+      <div class="field">
+        <span>Status</span>
+        <div id="status" class="status"><span class="dot"></span><span id="statusText">Idle</span></div>
+      </div>
+
+      <button id="detectChip" class="chip" type="button" hidden></button>
+    </div>
+
+    <div class="row" style="margin-top:16px">
+      <button id="startBtn" class="btn primary" type="button">● Start listening</button>
+      <button id="stopBtn"  class="btn stop" type="button" disabled>■ Stop</button>
+      <button id="clearBtn" class="btn ghost" type="button">✕ Clear</button>
+    </div>
+
+    <p class="hint">
+      Allow microphone access when prompted. Chrome ends the session after a short silence —
+      this page restarts it automatically so you can keep talking.
+      Shortcut: <code>Ctrl</code> / <code>⌘</code> + <code>Enter</code> to start or stop.<br />
+      <strong>How auto-detect works:</strong> the recogniser starts in your browser language. If it
+      hears nothing it can parse, it <em>scans</em> through a shortlist of common languages until one
+      produces text. Once phrases arrive, the script (Devanagari, Arabic, Han, Cyrillic, …) and
+      Latin-script stop-words are analysed, and the engine switches automatically after two matching
+      detections. Click the blue chip to reset back to your browser language.
+      It is <em>best effort</em> — the Web Speech API has no built-in language detection, so for
+      difficult accents pick the language manually.
+    </p>
+  </section>
+
+  <!-- OPTIONAL MEDIA -->
+  <section class="card">
+    <h2>Optional — caption an audio / video file</h2>
+    <p class="desc">
+      Browsers only feed the <b>microphone</b> into speech recognition. To caption a file:
+      load it (or drag &amp; drop it onto the stage), play it <b>out loud through your speakers</b>
+      (no headphones), then press <b>Start listening</b>. The mic hears the playback and
+      transcribes it live.
+    </p>
+
+    <div class="row">
+      <label class="field">
+        <span>Media file</span>
+        <input type="file" id="mediaFile" accept="audio/*,video/*" />
+      </label>
+      <button id="clearMedia" class="btn ghost" type="button" disabled>Remove file</button>
+    </div>
+  </section>
+
+  <!-- TRANSCRIPT -->
+  <section class="card">
+    <h2>Transcript &amp; export</h2>
+    <p class="desc">Every finalized phrase is timestamped and stored below. Translations (if enabled) are included in exports.</p>
+
+    <div class="row">
+      <button id="srtBtn"  class="btn" type="button" disabled>⬇ Download .SRT</button>
+      <button id="vttBtn"  class="btn" type="button" disabled>⬇ Download .VTT</button>
+      <button id="txtBtn"  class="btn" type="button" disabled>⬇ Download .TXT</button>
+      <button id="copyBtn" class="btn ghost" type="button" disabled>⧉ Copy text</button>
+    </div>
+
+    <div id="transcript" class="transcript">
+      <div class="empty" id="emptyMsg">No captions yet — press “Start listening”.</div>
+      <div id="cueList"></div>
+    </div>
+
+    <div class="meta">
+      <span>Cues: <b id="cueCount">0</b></span>
+      <span>Words: <b id="wordCount">0</b></span>
+      <span>Duration: <b id="duration">00:00</b></span>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Speech recognition uses the browser's built-in Web Speech API.
+  Chrome / Edge route audio to the platform speech service — still <b>no API key</b> required.
+  Timings are approximate (±0.3 s). Everything runs 100% client-side, so it can be hosted
+  anywhere static (GitHub Pages, Netlify, Cloudflare Pages) as long as it's served over HTTPS.
+</footer>
+
+<!-- ================= GTRANSLATE (page UI translation) ================= -->
+<script>
+  window.gtranslateSettings = {
+    "default_language": "en",
+    "detect_browser_language": true,
+    "wrapper_selector": ".gtranslate_wrapper",
+    "flag_size": 24,
+    "native_language_names": true,
+    "alt_flags": { "en": "usa" }
+  };
+</script>
+<script src="https://cdn.gtranslate.net/widgets/latest/dropdown.js" defer
+        onerror="window.__gtFailed=true;"></script>
+
+<!-- ================= CAPTIONS ENGINE ================= -->
+<script>
+(function () {
+  'use strict';
+
+  /* ============================================================
+     1) Element cache
+     ============================================================ */
+  var $ = function (id) { return document.getElementById(id); };
+
+  var el = {
+    lang:        $('lang'),
+    trLang:      $('trLang'),
+    startBtn:    $('startBtn'),
+    stopBtn:     $('stopBtn'),
+    clearBtn:    $('clearBtn'),
+    status:      $('status'),
+    statusText:  $('statusText'),
+    chip:        $('detectChip'),
+    stage:       $('stage'),
+    fsBtn:       $('fsBtn'),
+    placeholder: $('stagePlaceholder'),
+    phText:      $('phText'),
+    player:      $('player'),
+    subFinal:    $('subFinal'),
+    subTrans:    $('subTrans'),
+    subInterim:  $('subInterim'),
+    transcript:  $('transcript'),
+    emptyMsg:    $('emptyMsg'),
+    cueList:     $('cueList'),
+    srtBtn:      $('srtBtn'),
+    vttBtn:      $('vttBtn'),
+    txtBtn:      $('txtBtn'),
+    copyBtn:     $('copyBtn'),
+    cueCount:    $('cueCount'),
+    wordCount:   $('wordCount'),
+    durationEl:  $('duration'),
+    mediaFile:   $('mediaFile'),
+    clearMedia:  $('clearMedia'),
+    supportWarn: $('supportWarn'),
+    secureWarn:  $('secureWarn'),
+    gtWrapper:   $('gtWrapper')
+  };
+
+  /* ============================================================
+     2) Environment checks
+     ============================================================ */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var SR_OK = !!SR;
+
+  if (!SR_OK) {
+    el.supportWarn.classList.add('show');
+    el.startBtn.disabled = true;
+    el.lang.disabled = true;
+  }
+  if (SR_OK && !window.isSecureContext) {
+    el.secureWarn.classList.add('show');
+  }
+
+  // GTranslate fallback if the CDN widget never renders.
+  setTimeout(function () {
+    if (el.gtWrapper && el.gtWrapper.children.length === 0) {
+      var tl = (navigator.language || 'en').slice(0, 2);
+      var a = document.createElement('a');
+      a.className = 'gt-fallback';
+      a.target = '_blank';
+      a.rel = 'noopener';
+      a.href = 'https://translate.google.com/translate?sl=auto&tl=' + tl +
+               '&u=' + encodeURIComponent(location.href);
+      a.textContent = '🌐 Translate page';
+      el.gtWrapper.appendChild(a);
+    }
+  }, 3000);
+
+  /* ============================================================
+     3) State
+     ============================================================ */
+  var state = {
+    active:   false,   // user pressed Start and hasn't pressed Stop
+    rec:      null,    // current SpeechRecognition instance
+    timer:    null,    // restart timer
+    ticker:   null,    // duration ticker
+    gen:      0,       // generation guard (kills stale instances)
+    offset:   0,       // timeline offset (s) for the current session
+    t0:       0,       // performance.now() at session start
+    lastEnd:  0,       // end of the newest cue (s)
+    segs:     [],      // [{start, end, text, tr, el, ...}]
+    trOn:     false,
+    fails:    0,
+    errs:     0,
+    /* --- auto-detect --- */
+    autoLang:  null,   // language the auto-scanner settled on
+    scanIdx:   -1,     // index into SCAN_LIST
+    noSpeech:  0,      // consecutive 'no-speech' events
+    detCand:   null,   // candidate language from script analysis
+    detStreak: 0       // how many phrases in a row agreed
+  };
+
+  /* ============================================================
+     4) Language helpers
+     ============================================================ */
+  function browserLang() {
+    var l = (navigator.languages && navigator.languages[0]) ||
+            navigator.language || 'en-US';
+    return String(l);
+  }
+
+  function langName(code) {
+    if (!code) return '';
+    var opt = el.lang.querySelector('option[value="' + code + '"]');
+    if (opt) {
+      var txt = opt.textContent.trim();
+      var dash = txt.indexOf('—');
+      return (dash > -1 ? txt.slice(0, dash) : txt).trim();
+    }
+    return code;
+  }
+
+  function resolveRecogLang() {
+    if (el.lang.value !== 'auto') return el.lang.value;
+    return state.autoLang || browserLang() || 'en-US';
+  }
+
+  /* Shortlist used by the silent-scanner (auto mode, nothing heard yet). */
+  var SCAN_LIST = [
+    'en-US', 'hi-IN', 'es-ES', 'fr-FR', 'de-DE', 'pt-BR', 'ar-SA', 'zh-CN',
+    'ja-JP', 'ru-RU', 'id-ID', 'tr-TR', 'ta-IN', 'te-IN', 'bn-IN', 'mr-IN',
+    'ko-KR', 'it-IT', 'nl-NL', 'pl-PL', 'vi-VN', 'th-TH', 'ur-PK', 'fa-IR',
+    'gu-IN', 'kn-IN', 'ml-IN', 'pa-IN', 'sv-SE', 'uk-UA', 'el-GR', 'he-IL'
+  ];
+
+  /* Latin-script stop-word profiles (only used for suggestion, low confidence). */
+  var LATIN_HINTS = {
+    'en-US': ['the','and','you','that','this','with','have','for','not','are','was','what','your','can','but','all','about','just','like','know'],
+    'es-ES': ['que','de','no','el','la','los','las','un','una','es','por','con','para','pero','como','más','muy','yo','esto','eso','hay'],
+    'fr-FR': ['le','la','les','de','des','et','est','un','une','que','qui','pas','pour','dans','sur','avec','vous','nous','je','il','elle','ce','cette'],
+    'de-DE': ['der','die','das','und','ist','nicht','ich','du','er','sie','es','ein','eine','mit','auf','für','von','zu','den','dem','sich','auch'],
+    'it-IT': ['il','lo','la','gli','le','di','che','e','è','non','per','con','una','un','sono','questo','questa','ma','come','più'],
+    'pt-BR': ['os','as','de','que','e','é','não','um','uma','para','com','por','isso','este','esta','mas','como','mais','você','muito'],
+    'nl-NL': ['het','een','en','is','niet','ik','je','dat','die','van','op','te','met','voor','zijn','er','maar','ook','dit','wat'],
+    'pl-PL': ['się','to','jest','nie','że','do','od','tak','jak','ale','co','mi','go','ja','ty','jestem','bardzo','tylko','jeszcze'],
+    'tr-TR': ['bir','bu','da','de','için','ile','çok','daha','ne','var','yok','ben','sen','ama','gibi','kadar','şey','olan','olarak'],
+    'id-ID': ['yang','dan','di','ke','dari','ini','itu','untuk','dengan','tidak','ada','saya','kamu','kami','akan','sudah','bisa','juga'],
+    'vi-VN': ['của','là','có','không','được','trong','cho','một','này','đó','với','như','để','người','tôi','bạn','chúng','rất'],
+    'sv-SE': ['och','att','det','som','är','för','på','med','den','till','inte','jag','du','han','hon','vi','om','men','också']
+  };
+
+  /* Script → language detection (returns null when unsure). */
+  function detectScript(text) {
+    var t = String(text || '');
+    if (!t) return null;
+
+    /* Arabic script — refine Urdu / Persian before plain Arabic. */
+    if (/[\u0600-\u06FF\u0750-\u077F]/.test(t)) {
+      if (/[\u0679\u0688\u0691\u06BA\u06D2\u06C1]/.test(t)) return { code: 'ur-PK', name: 'اردو' };
+      if (/[\u067E\u0686\u0698\u06AF]/.test(t))             return { code: 'fa-IR', name: 'فارسی' };
+      return { code: 'ar-SA', name: 'العربية' };
+    }
+
+    if (/[\u0900-\u097F]/.test(t)) return { code: 'hi-IN', name: 'हिन्दी' };
+    if (/[\u0980-\u09FF]/.test(t)) return { code: 'bn-IN', name: 'বাংলা' };
+    if (/[\u0A00-\u0A7F]/.test(t)) return { code: 'pa-IN', name: 'ਪੰਜਾਬੀ' };
+    if (/[\u0A80-\u0AFF]/.test(t)) return { code: 'gu-IN', name: 'ગુજરાતી' };
+    if (/[\u0B80-\u0BFF]/.test(t)) return { code: 'ta-IN', name: 'தமிழ்' };
+    if (/[\u0C00-\u0C7F]/.test(t)) return { code: 'te-IN', name: 'తెలుగు' };
+    if (/[\u0C80-\u0CFF]/.test(t)) return { code: 'kn-IN', name: 'ಕನ್ನಡ' };
+    if (/[\u0D00-\u0D7F]/.test(t)) return { code: 'ml-IN', name: 'മലയാളം' };
+    if (/[\u0590-\u05FF]/.test(t)) return { code: 'he-IL', name: 'עברית' };
+    if (/[\u0370-\u03FF]/.test(t)) return { code: 'el-GR', name: 'Ελληνικά' };
+    if (/[\u0400-\u04FF]/.test(t)) return { code: 'ru-RU', name: 'Русский' };
+    if (/[\u0E00-\u0E7F]/.test(t)) return { code: 'th-TH', name: 'ไทย' };
+    if (/[\u3040-\u30FF]/.test(t)) return { code: 'ja-JP', name: '日本語' };
+    if (/[\uAC00-\uD7AF]/.test(t)) return { code: 'ko-KR', name: '한국어' };
+    if (/[\u4E00-\u9FFF]/.test(t)) return { code: 'zh-CN', name: '中文' };
+
+    /* Latin script — stop-word scoring. */
+    var words;
+    try {
+      words = t.toLowerCase().split(/[^\p{L}\p{M}]+/u).filter(function (w) { return w.length > 1; });
+    } catch (e) {
+      words = t.toLowerCase().split(/[^a-zà-ÿ]+/i).filter(function (w) { return w.length > 1; });
+    }
+    if (words.length < 3) return null;
+
+    var best = null, bestScore = 0, bestHits = 0;
+    for (var code in LATIN_HINTS) {
+      if (!Object.prototype.hasOwnProperty.call(LATIN_HINTS, code)) continue;
+      var list = LATIN_HINTS[code], hits = 0;
+      for (var i = 0; i < words.length; i++) {
+        if (list.indexOf(words[i]) !== -1) hits++;
+      }
+      var score = hits / words.length;
+      if (hits >= 2 && score > bestScore) { bestScore = score; bestHits = hits; best = code; }
+    }
+    if (best && bestScore >= 0.22 && bestHits >= 2) {
+      return { code: best, name: langName(best), latin: true };
+    }
+    return null;
+  }
+
+  /* ============================================================
+     5) Small helpers
+     ============================================================ */
+  function pad(n, len) {
+    n = String(n);
+    while (n.length < (len || 2)) n = '0' + n;
+    return n;
+  }
+
+  function elapsed() {
+    return state.offset + (performance.now() - state.t0) / 1000;
+  }
+
+  function ts(sec, sep) {                        // 12.345 -> "00:00:12,345"
+    sec = Math.max(0, sec);
+    var h  = Math.floor(sec / 3600);
+    var m  = Math.floor((sec % 3600) / 60);
+    var s  = Math.floor(sec % 60);
+    var ms = Math.round((sec - Math.floor(sec)) * 1000);
+    if (ms >= 1000) ms = 999;
+    return pad(h) + ':' + pad(m) + ':' + pad(s) + sep + pad(ms, 3);
+  }
+
+  function short(sec) {                          // 3725 -> "1:02:05"
+    sec = Math.max(0, Math.floor(sec));
+    var h = Math.floor(sec / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    var s = sec % 60;
+    return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s);
+  }
+
+  function stamp() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+           '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+  }
+
+  function getCookie(name) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.*+?^${}()|[\]\\])/g, '\\$1') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  /* Page language as chosen in the GTranslate widget (or <html lang>). */
+  function pageTargetLang() {
+    var c = getCookie('googtrans');
+    if (c) {
+      var parts = c.split('/').filter(Boolean);
+      if (parts.length >= 2) return parts[1];
+    }
+    var hl = (document.documentElement.lang || '').toLowerCase();
+    if (hl && hl.indexOf('en') !== 0) return hl;
+    return null;
+  }
+
+  function resolveTargetLang() {
+    var v = el.trLang.value;
+    if (v !== 'auto') return v;
+    var p = pageTargetLang();
+    if (p) return p.split('-')[0];
+    return (browserLang() || 'en').split('-')[0];
+  }
+
+  /* ============================================================
+     6) UI helpers
+     ============================================================ */
+  function setStatus(kind, text) {
+    el.status.className = 'status' + (kind ? ' ' + kind : '');
+    el.statusText.textContent = text;
+  }
+
+  function refreshButtons() {
+    el.startBtn.disabled = !SR_OK || state.active;
+    el.stopBtn.disabled  = !state.active;
+    var has = state.segs.length > 0;
+    el.srtBtn.disabled  = !has;
+    el.vttBtn.disabled  = !has;
+    el.txtBtn.disabled  = !has;
+    el.copyBtn.disabled = !has;
+  }
+
+  function refreshStats() {
+    var words = 0;
+    for (var i = 0; i < state.segs.length; i++) {
+      words += state.segs[i].text.split(/\s+/).filter(Boolean).length;
+    }
+    el.cueCount.textContent  = state.segs.length;
+    el.wordCount.textContent = words;
+    var last = state.segs[state.segs.length - 1];
+    el.durationEl.textContent = short(last ? last.end : 0);
+  }
+
+  function updateEmptyState() {
+    if (!el.emptyMsg) return;
+    el.emptyMsg.style.display = state.segs.length ? 'none' : '';
+  }
+
+  var flashTimer = null;
+
+  function updateLangHint() {
+    if (!el.chip) return;
+    if (el.lang.value !== 'auto') { el.chip.hidden = true; return; }
+    var code = state.autoLang || browserLang();
+    el.chip.hidden = false;
+    el.chip.classList.remove('busy');
+    el.chip.textContent = '🌐 Auto · ' + (langName(code) || code) + ' · ' + code;
+    el.chip.title = 'Auto-detected language — click to reset to your browser language';
+  }
+
+  function flashChip(msg) {
+    if (!el.chip || el.lang.value !== 'auto') return;
+    el.chip.hidden = false;
+    el.chip.classList.add('busy');
+    el.chip.textContent = msg;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(updateLangHint, 2400);
+  }
+
+  /* ============================================================
+     7) Transcript rows
+     ============================================================ */
+  function buildRow(seg) {
+    var row = document.createElement('div');
+    row.className = 'seg';
+
+    var time = document.createElement('span');
+    time.className = 'seg-time';
+
+    var wrap = document.createElement('span');
+    wrap.className = 'seg-text';
+
+    var orig = document.createElement('span');
+    orig.className = 'seg-orig';
+
+    var tr = document.createElement('span');
+    tr.className = 'seg-tr';
+    tr.hidden = true;
+
+    wrap.appendChild(orig);
+    wrap.appendChild(tr);
+    row.appendChild(time);
+    row.appendChild(wrap);
+
+    seg.el     = row;
+    seg.timeEl = time;
+    seg.origEl = orig;
+    seg.trEl   = tr;
+    return row;
+  }
+
+  function paintRow(seg) {
+    if (!seg.el) return;
+    seg.timeEl.textContent = short(seg.start) + ' → ' + short(seg.end);
+    seg.origEl.textContent = seg.text;
+    if (seg.tr) {
+      seg.trEl.textContent = seg.tr;
+      seg.trEl.hidden = false;
+    } else {
+      seg.trEl.textContent = '';
+      seg.trEl.hidden = true;
+    }
+  }
+
+  /* ============================================================
+     8) Live subtitle overlay
+     ============================================================ */
+  function updateSubs() {
+    var last = state.segs[state.segs.length - 1];
+
+    if (last) {
+      el.subFinal.classList.remove('placeholder');
+      el.subFinal.textContent = last.text;
+
+      if (state.trOn && last.tr) {
+        el.subTrans.textContent = last.tr;
+        el.subTrans.hidden = false;
+      } else {
+        el.subTrans.textContent = '';
+        el.subTrans.hidden = true;
+      }
+    } else {
+      el.subFinal.classList.add('placeholder');
+      el.subFinal.textContent = 'Press “Start listening” and begin speaking…';
+      el.subTrans.textContent = '';
+      el.subTrans.hidden = true;
+    }
+  }
+
+  /* ============================================================
+     9) Caption translation (free endpoint, no key)
+     ============================================================ */
+  var trCache = Object.create(null);
+  var trFailures = 0;
+
+  function translateText(text, target) {
+    var key = target + '|' + text;
+    if (trCache[key]) return Promise.resolve(trCache[key]);
+
+    var url = 'https://translate.googleapis.com/translate_a/single' +
+              '?client=gtx&dj=1&sl=auto&tl=' + encodeURIComponent(target) +
+              '&dt=t&q=' + encodeURIComponent(text);
+
+    return fetch(url, { method: 'GET' }).then(function (res) {
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      return res.json();
+    }).then(function (data) {
+      var out = '';
+      if (data && data.sentences && data.sentences.length) {
+        for (var i = 0; i < data.sentences.length; i++) {
+          out += data.sentences[i].trans || '';
+        }
+      } else if (Array.isArray(data) && Array.isArray(data[0])) {
+        for (var j = 0; j < data[0].length; j++) {
+          out += (data[0][j] && data[0][j][0]) || '';
+        }
+      }
+      out = String(out).replace(/\s+/g, ' ').trim();
+      if (out) { trCache[key] = out; trFailures = 0; }
+      return out;
+    });
+  }
+
+  function translateSeg(seg) {
+    if (!state.trOn) return;
+    var target = resolveTargetLang();
+    if (!target) return;
+
+    clearTimeout(seg.trTimer);
+    seg.trTimer = setTimeout(function () {
+      translateText(seg.text, target).then(function (out) {
+        if (!out) return;
+        if (!state.trOn || resolveTargetLang() !== target) return;
+        seg.tr = out;
+        paintRow(seg);
+        updateSubs();
+      }).catch(function () {
+        trFailures++;
+        if (trFailures === 3) {
+          state.trOn = false;
+          el.trLang.value = '';
+          updateSubs();
+        }
+      });
+    }, 220);
+  }
+
+  /* ============================================================
+     10) Auto-detect logic
+     ============================================================ */
+  function applyAutoLang(code, reason) {
+    state.autoLang = code;
+    state.scanIdx = SCAN_LIST.indexOf(code);
+    state.detCand = null;
+    state.detStreak = 0;
+    updateLangHint();
+    flashChip('🌐 Auto → ' + (langName(code) || code) + (reason ? ' · ' + reason : ''));
+    restartRecognizer();
+  }
+
+  function analyzeAuto(seg) {
+    if (el.lang.value !== 'auto') return;
+    if (!seg || !seg.text) return;
+
+    var det = detectScript(seg.text);
+    if (!det) { state.detStreak = 0; state.detCand = null; return; }
+
+    var current = state.autoLang || browserLang();
+    if (String(det.code).split('-')[0] === String(current).split('-')[0]) {
+      state.detStreak = 0;
+      state.detCand = null;
+      return;
+    }
+
+    if (state.detCand === det.code) {
+      state.detStreak++;
+    } else {
+      state.detCand = det.code;
+      state.detStreak = 1;
+    }
+
+    var need = det.latin ? 4 : 2;   // Latin script is noisy → demand more evidence
+    if (state.detStreak >= need) {
+      applyAutoLang(det.code, 'detected');
+    } else {
+      flashChip('🔍 Detected ' + (det.name || det.code) + '…');
+    }
+  }
+
+  function advanceScan() {
+    state.scanIdx = (state.scanIdx + 1) % SCAN_LIST.length;
+    state.autoLang = SCAN_LIST[state.scanIdx];
+    updateLangHint();
+    flashChip('🔍 Scanning: ' + (langName(state.autoLang) || state.autoLang));
+  }
+
+  /* ============================================================
+     11) Finalize a phrase
+     ============================================================ */
+  function finalize(raw) {
+    var text = String(raw || '').replace(/\s+/g, ' ').trim();
+    if (!text) return;
+
+    var end   = elapsed();
+    var start = state.lastEnd;
+    var prev  = state.segs[state.segs.length - 1];
+
+    if (end <= start) end = start + 0.6;
+    if (!prev) start = Math.max(0, end - Math.max(0.6, text.length * 0.055));
+
+    var shouldMerge =
+      prev &&
+      (start - prev.end) < 0.85 &&
+      (prev.text.length + text.length) < 110 &&
+      !/[.!?…।。？！]$/.test(prev.text);
+
+    var seg;
+
+    if (shouldMerge) {
+      prev.text = (prev.text + ' ' + text).trim();
+      prev.end  = end;
+      prev.tr   = '';
+      paintRow(prev);
+      seg = prev;
+    } else {
+      seg = { start: start, end: end, text: text, tr: '', el: null };
+      state.segs.push(seg);
+      el.cueList.appendChild(buildRow(seg));
+      paintRow(seg);
+    }
+
+    state.lastEnd = end;
+
+    updateEmptyState();
+    updateSubs();
+    translateSeg(seg);
+    analyzeAuto(seg);
+    refreshStats();
+    refreshButtons();
+
+    el.transcript.scrollTop = el.transcript.scrollHeight;
+  }
+
+  /* ============================================================
+     12) Recognition lifecycle
+     ============================================================ */
+  function handleError(ev) {
+    var err = ev && ev.error;
+
+    if (err === 'aborted') return;
+
+    if (err === 'no-speech') {
+      /* Auto mode + nothing transcribed yet → scan the language shortlist. */
+      if (el.lang.value === 'auto' && state.segs.length === 0 && state.active) {
+        state.noSpeech++;
+        if (state.noSpeech >= 3) {
+          state.noSpeech = 0;
+          advanceScan();
+        }
+      }
+      return;
+    }
+
+    if (err === 'not-allowed' || err === 'service-not-allowed') {
+      setStatus('error', 'Microphone blocked');
+      el.secureWarn.classList.add('show');
+      stopAll();
+      return;
+    }
+    if (err === 'audio-capture') {
+      setStatus('error', 'No microphone');
+      stopAll();
+      return;
+    }
+    if (err === 'network') {
+      state.errs++;
+      if (state.errs > 6) {
+        setStatus('error', 'Network error — stopped');
+        stopAll();
+      } else {
+        setStatus('error', 'Network error — retrying…');
+      }
+      return;
+    }
+    setStatus('error', 'Error: ' + err);
+  }
+
+  /**
+   * Spin up a *fresh* SpeechRecognition instance.
+   * Reusing one after it ends throws InvalidStateError in Chrome.
+   */
+  function spinUp() {
+    if (!SR_OK || !state.active) return;
+
+    clearTimeout(state.timer);
+
+    var rec;
+    try { rec = new SR(); } catch (e) { return; }
+
+    var myGen = ++state.gen;
+    state.rec = rec;
+
+    rec.continuous      = true;
+    rec.interimResults  = true;
+    rec.maxAlternatives = 1;
+    rec.lang            = resolveRecogLang();
+
+    var seen = (typeof WeakSet !== 'undefined') ? new WeakSet() : null;
+
+    rec.onstart = function () {
+      if (myGen !== state.gen) return;
+      state.fails = 0;
+      state.errs  = 0;
+      setStatus('listening', 'Listening…');
+      el.stage.classList.add('listening');
+      el.phText.textContent = 'Listening… speak now';
+    };
+
+    rec.onresult = function (ev) {
+      if (myGen !== state.gen) return;
+
+      state.noSpeech = 0;
+      var interim = '';
+
+      for (var i = ev.resultIndex; i < ev.results.length; i++) {
+        var res = ev.results[i];
+        var txt = (res[0] && res[0].transcript) || '';
+
+        if (res.isFinal) {
+          if (seen) {
+            if (seen.has(res)) continue;
+            seen.add(res);
+          }
+          var clean = String(txt).replace(/\s+/g, ' ').trim();
+          if (clean) finalize(clean);
+        } else {
+          interim += txt;
+        }
+      }
+
+      el.subInterim.textContent = interim;
+    };
+
+    rec.onerror = function (ev) {
+      if (myGen !== state.gen) return;
+      handleError(ev);
+    };
+
+    rec.onend = function () {
+      if (myGen !== state.gen) return;
+
+      el.subInterim.textContent = '';
+
+      if (!state.active) {
+        el.stage.classList.remove('listening');
+        setStatus('idle', 'Stopped');
+        return;
+      }
+      // Chrome stops after a short silence — restart with a new instance.
+      clearTimeout(state.timer);
+      state.timer = setTimeout(spinUp, 280);
+    };
+
+    try {
+      rec.start();
+    } catch (e) {
+      state.fails++;
+      if (state.fails > 30) {
+        setStatus('error', 'Could not start microphone');
+        stopAll();
+        return;
+      }
+      clearTimeout(state.timer);
+      state.timer = setTimeout(spinUp, 500);
+    }
+  }
+
+  /* Kill the current instance and start a new one with the current language. */
+  function restartRecognizer() {
+    if (!state.active) return;
+    clearTimeout(state.timer);
+    state.gen++;                       // invalidate the old instance's handlers
+    if (state.rec) {
+      try { state.rec.abort(); } catch (e) {}
+      state.rec = null;
+    }
+    state.timer = setTimeout(spinUp, 220);
+  }
+
+  /* ============================================================
+     13) Start / stop
+     ============================================================ */
+  function startTicker() {
+    stopTicker();
+    state.ticker = setInterval(function () {
+      if (!state.active) return;
+      var last = state.segs[state.segs.length - 1];
+      var t = Math.max(elapsed(), last ? last.end : 0);
+      el.durationEl.textContent = short(t);
+    }, 400);
+  }
+
+  function stopTicker() {
+    if (state.ticker) { clearInterval(state.ticker); state.ticker = null; }
+  }
+
+  function start() {
+    if (!SR_OK || state.active) return;
+
+    if (!window.isSecureContext) {
+      el.secureWarn.classList.add('show');
+      setStatus('error', 'Insecure context');
+      return;
+    }
+
+    state.active   = true;
+    state.fails    = 0;
+    state.errs     = 0;
+    state.noSpeech = 0;
+    state.detCand  = null;
+    state.detStreak = 0;
+
+    /* Auto mode: start from the browser language, reset the scan pointer. */
+    if (el.lang.value === 'auto') {
+      state.autoLang = null;
+      var bl = browserLang();
+      var idx = SCAN_LIST.indexOf(bl);
+      state.scanIdx = idx >= 0 ? idx : -1;
+      updateLangHint();
+    } else {
+      state.autoLang = null;
+      updateLangHint();
+    }
+
+    var last = state.segs[state.segs.length - 1];
+    state.offset  = last ? last.end + 0.3 : 0;
+    state.lastEnd = state.offset;
+    state.t0      = performance.now();
+
+    setStatus('', 'Starting…');
+    spinUp();
+    startTicker();
+    refreshButtons();
+  }
+
+  function stopAll() {
+    state.active = false;
+    state.gen++;                       // invalidate everything in flight
+    clearTimeout(state.timer);
+    stopTicker();
+
+    if (state.rec) {
+      try { state.rec.abort(); } catch (e) {}
+      state.rec = null;
+    }
+
+    el.subInterim.textContent = '';
+    el.stage.classList.remove('listening');
+    el.phText.textContent = 'Press “Start listening” and begin speaking…';
+    setStatus('idle', 'Stopped');
+    refreshButtons();
+  }
+
+  /* ============================================================
+     14) Export builders
+     ============================================================ */
+  function cueBody(seg) {
+    return seg.text + (seg.tr ? '\n' + seg.tr : '');
+  }
+
+  function buildSRT() {
+    return '\uFEFF' + state.segs.map(function (s, i) {
+      var a = ts(Math.max(0, s.start), ',');
+      var b = ts(Math.max(s.end, s.start + 0.6), ',');
+      return (i + 1) + '\n' + a + ' --> ' + b + '\n' + cueBody(s) + '\n';
+    }).join('\n');
+  }
+
+  function buildVTT() {
+    var body = state.segs.map(function (s, i) {
+      var a = ts(Math.max(0, s.start), '.');
+      var b = ts(Math.max(s.end, s.start + 0.6), '.');
+      return (i + 1) + '\n' + a + ' --> ' + b + '\n' + cueBody(s) + '\n';
+    }).join('\n');
+    return 'WEBVTT\n\n' + body;
+  }
+
+  function buildTXT() {
+    return state.segs.map(function (s) {
+      return '[' + short(s.start) + '] ' + s.text + (s.tr ? '\n          ' + s.tr : '');
+    }).join('\n');
+  }
+
+  function download(filename, content, mime) {
+    var blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  /* ============================================================
+     15) Events — controls
+     ============================================================ */
+  el.startBtn.addEventListener('click', start);
+  el.stopBtn.addEventListener('click', function () { if (state.active) stopAll(); });
+
+  el.clearBtn.addEventListener('click', function () {
+    stopAll();
+
+    state.segs     = [];
+    state.offset   = 0;
+    state.lastEnd  = 0;
+    state.autoLang = null;
+    state.detCand  = null;
+    state.detStreak = 0;
+
+    el.cueList.innerHTML = '';
+    el.subFinal.textContent = 'Press “Start listening” and begin speaking…';
+    el.subFinal.classList.add('placeholder');
+    el.subTrans.textContent = '';
+    el.subTrans.hidden = true;
+    el.subInterim.textContent = '';
+
+    updateEmptyState();
+    updateLangHint();
+    refreshStats();
+    refreshButtons();
+  });
+
+  el.srtBtn.addEventListener('click', function () {
+    if (!state.segs.length) return;
+    download('captions_' + stamp() + '.srt', buildSRT(), 'application/x-subrip');
+  });
+
+  el.vttBtn.addEventListener('click', function () {
+    if (!state.segs.length) return;
+    download('captions_' + stamp() + '.vtt', buildVTT(), 'text/vtt');
+  });
+
+  el.txtBtn.addEventListener('click', function () {
+    if (!state.segs.length) return;
+    download('captions_' + stamp() + '.txt', buildTXT(), 'text/plain');
+  });
+
+  el.copyBtn.addEventListener('click', function () {
+    if (!state.segs.length) return;
+    var text = state.segs.map(function (s) {
+      return s.text + (s.tr ? '\n' + s.tr : '');
+    }).join('\n');
+
+    var done = function () {
+      var old = el.copyBtn.textContent;
+      el.copyBtn.textContent = '✓ Copied!';
+      setTimeout(function () { el.copyBtn.textContent = old; }, 1400);
+    };
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done).catch(function () {});
+    } else {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) {}
+      ta.remove();
+    }
+  });
+
+  /* ----- reset auto language by clicking the chip ----- */
+  el.chip.addEventListener('click', function () {
+    if (el.lang.value !== 'auto') return;
+    state.autoLang = null;
+    state.scanIdx  = -1;
+    state.detCand  = null;
+    state.detStreak = 0;
+    updateLangHint();
+    flashChip('🌐 Reset to browser language');
+    restartRecognizer();
+  });
+
+  /* ----- recognition language change ----- */
+  el.lang.addEventListener('change', function () {
+    try { localStorage.setItem('ac.lang', el.lang.value); } catch (e) {}
+
+    state.autoLang = null;
+    state.scanIdx  = -1;
+    state.detCand  = null;
+    state.detStreak = 0;
+    state.noSpeech = 0;
+
+    if (el.lang.value === 'auto') {
+      var bl = browserLang();
+      var idx = SCAN_LIST.indexOf(bl);
+      state.scanIdx = idx >= 0 ? idx : -1;
+    }
+
+    updateLangHint();
+
+    if (state.active) restartRecognizer();
+  });
+
+  /* ----- caption translation target change ----- */
+  el.trLang.addEventListener('change', function () {
+    state.trOn = !!el.trLang.value;
+    try { localStorage.setItem('ac.trLang', el.trLang.value); } catch (e) {}
+
+    if (!state.trOn) {
+      state.segs.forEach(function (s) { s.tr = ''; paintRow(s); });
+      updateSubs();
+    } else {
+      state.segs.forEach(function (s) { s.tr = ''; paintRow(s); translateSeg(s); });
+    }
+  });
+
+  /* ----- keyboard shortcut ----- */
+  document.addEventListener('keydown', function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      if (state.active) stopAll(); else start();
+    }
+  });
+
+  /* ----- fullscreen ----- */
+  el.fsBtn.addEventListener('click', function () {
+    if (!document.fullscreenElement) {
+      if (el.stage.requestFullscreen) el.stage.requestFullscreen().catch(function () {});
+    } else if (document.exitFullscreen) {
+      document.exitFullscreen().catch(function () {});
+    }
+  });
+
+  document.addEventListener('fullscreenchange', function () {
+    el.fsBtn.title = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
+  });
+
+  /* ============================================================
+     16) Optional media file
+     ============================================================ */
+  function loadMedia(file) {
+    if (!file) return;
+    if (!/^(audio|video)\//.test(file.type)) return;
+
+    if (el.player.src) URL.revokeObjectURL(el.player.src);
+    el.player.src = URL.createObjectURL(file);
+    el.player.hidden = false;
+    el.placeholder.style.display = 'none';
+    el.clearMedia.disabled = false;
+    el.player.load();
+  }
+
+  el.mediaFile.addEventListener('change', function (e) {
+    loadMedia(e.target.files && e.target.files[0]);
+  });
+
+  el.clearMedia.addEventListener('click', function () {
+    if (el.player.src) URL.revokeObjectURL(el.player.src);
+    el.player.removeAttribute('src');
+    el.player.load();
+    el.player.hidden = true;
+    el.placeholder.style.display = '';
+    el.clearMedia.disabled = true;
+    el.mediaFile.value = '';
+  });
+
+  ['dragenter', 'dragover'].forEach(function (name) {
+    el.stage.addEventListener(name, function (e) {
+      e.preventDefault();
+      el.stage.style.borderColor = 'var(--accent)';
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (name) {
+    el.stage.addEventListener(name, function (e) {
+      e.preventDefault();
+      el.stage.style.borderColor = '';
+    });
+  });
+  el.stage.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) loadMedia(f);
+  });
+
+  /* ============================================================
+     17) Watch the page language so "Auto" translation follows it
+     ============================================================ */
+  var lastPageLang = pageTargetLang();
+  setInterval(function () {
+    if (el.trLang.value !== 'auto') return;
+    var now = pageTargetLang();
+    if (now !== lastPageLang) {
+      lastPageLang = now;
+      state.segs.forEach(function (s) { s.tr = ''; paintRow(s); translateSeg(s); });
+    }
+  }, 1600);
+
+  /* ============================================================
+     18) Cleanup
+     ============================================================ */
+  window.addEventListener('beforeunload', function () {
+    state.active = false;
+    state.gen++;
+    stopTicker();
+    clearTimeout(state.timer);
+    if (state.rec) { try { state.rec.abort(); } catch (e) {} }
+    if (el.player.src) URL.revokeObjectURL(el.player.src);
+  });
+
+  /* ============================================================
+     19) Init
+     ============================================================ */
+  try {
+    var savedLang = localStorage.getItem('ac.lang');
+    if (savedLang !== null && el.lang.querySelector('option[value="' + savedLang + '"]')) {
+      el.lang.value = savedLang;
+    }
+    var savedTr = localStorage.getItem('ac.trLang');
+    if (savedTr !== null) {
+      var opt = el.trLang.querySelector('option[value="' + savedTr + '"]');
+      if (opt) el.trLang.value = savedTr;
+    }
+  } catch (e) {}
+
+  state.trOn = !!el.trLang.value;
+
+  if (el.lang.value === 'auto') {
+    var initLang = browserLang();
+    var initIdx = SCAN_LIST.indexOf(initLang);
+    state.scanIdx = initIdx >= 0 ? initIdx : -1;
+  }
+
+  refreshButtons();
+  refreshStats();
+  updateEmptyState();
+  updateSubs();
+  updateLangHint();
+  setStatus('idle', 'Idle');
+})();
+</script>
+
+</body>
+</html>
