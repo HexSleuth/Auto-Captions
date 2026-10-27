@@ -6,7 +6,7 @@
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#0d1117" />
 <title>Auto Captions · Live Mic + System Audio + Whisper · SRT/VTT/ASS (No API Key)</title>
-<meta name="description" content="Browser-only live captions. Mic via Web Speech API. System/tab audio via in-browser Whisper. Exports SRT/VTT/ASS/JSON. No API key." />
+<meta name="description" content="Browser-only live captions. Mic via Web Speech API. System/tab audio via in-browser Whisper. Exports SRT/VTT/ASS/JSON/WAV. No API key." />
 <link rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
       crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -145,6 +145,39 @@
   details.assopts[open] summary{margin-bottom:14px}
   footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:#565f6b;font-size:12px;line-height:1.6}
   @media (max-width:620px){.brand h1{font-size:17px}select,input[type="file"]{min-width:150px}.subs{padding:60px 14px 18px}.tab{padding:10px 12px;font-size:13px}}
+
+  /* === New: recording session styles === */
+  .badge-rec{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;text-transform:uppercase;
+    letter-spacing:.6px;padding:3px 9px;border-radius:999px;color:#ff7b72;background:rgba(248,81,73,.14);
+    border:1px solid rgba(248,81,73,.45);margin-left:8px;animation:blink 1.2s infinite}
+  @keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.32}}
+  .pipeline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:14px 0}
+  .pipe-step{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:8px;
+    border:1px solid var(--border);background:#0d1117;font-size:11.5px;font-weight:650;color:var(--muted);
+    transition:color .2s,border-color .2s,background .2s}
+  .pipe-step.active{color:#7ee787;border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1)}
+  .pipe-step i{font-size:11px}
+  .pipe-arrow{color:#30363d;font-size:12px;padding:0 2px}
+  .rec-stats{display:flex;gap:22px;flex-wrap:wrap;margin:12px 0 4px}
+  .rec-stat{display:flex;flex-direction:column;gap:2px}
+  .rec-stat span{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+  .rec-stat b{font-size:15px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:var(--text);font-weight:650}
+  .rec-stat b.warn{color:#ffd8a8}
+  .level-meter{display:flex;gap:3px;height:44px;align-items:stretch;margin:8px 0 2px;
+    padding:5px;background:#0b0f14;border:1px solid var(--border);border-radius:9px}
+  .level-meter i{flex:1;background:#21262d;border-radius:2px;transition:background .08s}
+  .level-meter i.on{background:linear-gradient(180deg,#3fb950,#2f81f7)}
+  .chunk-list{margin-top:14px;max-height:260px;overflow-y:auto;border:1px solid var(--border);
+    border-radius:10px;background:#0b0f14;padding:6px}
+  .chunk-list::-webkit-scrollbar{width:10px}
+  .chunk-list::-webkit-scrollbar-thumb{background:#30363d;border-radius:8px;border:2px solid #0b0f14}
+  .chunk-empty{color:#565f6b;font-size:13px;padding:22px;text-align:center}
+  .chunk-item{display:flex;align-items:center;gap:12px;padding:8px 10px;border-radius:6px;font-size:13px}
+  .chunk-item:nth-child(odd){background:rgba(255,255,255,.022)}
+  .chunk-idx{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--accent);min-width:40px;font-weight:700}
+  .chunk-time{flex:1;font-family:ui-monospace,monospace;font-size:12px;color:var(--muted)}
+  .chunk-size{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--text);min-width:72px;text-align:right;font-weight:600}
+  .chunk-dl{padding:5px 9px !important;font-size:11px !important}
 </style>
 </head>
 <body>
@@ -154,7 +187,7 @@
     <div class="logo"><i class="fa-solid fa-closed-captioning"></i></div>
     <div>
       <h1>Auto Captions <span class="badge">No API Key</span></h1>
-      <p class="sub">Mic · System audio · File → Whisper · SRT / VTT / ASS</p>
+      <p class="sub">Mic · System audio · File → Whisper · SRT / VTT / ASS / WAV</p>
     </div>
   </div>
 </header>
@@ -249,16 +282,16 @@
     </div>
   </section>
 
-  <!-- ============ SYSTEM TAB ============ -->
+  <!-- ============ SYSTEM TAB (upgraded) ============ -->
   <section id="systemPanel" hidden>
     <div id="sysCapWarn" class="warnbox"></div>
 
     <div class="card">
-      <h2>System / Tab audio → Whisper (In-browser)</h2>
+      <h2>System / Tab audio → Whisper + WAV recorder</h2>
       <p class="desc">
-        Capture <b>any</b> tab or the whole screen (with audio), and transcribe it live using
-        <b>Whisper</b> running in a Web Worker. <b>No virtual cable, no monitor loop, no API key</b>.
-        First run downloads the model (~40 MB for tiny.en), then it's cached.
+        Capture <b>any</b> tab or the whole screen (with audio), then transcribe it live via <b>Whisper</b>
+        in a Web Worker — and simultaneously archive it as <b>chunked WAV files</b> you can download.
+        <b>No virtual cable, no monitor loop, no API key, no server</b>.
       </p>
       <div class="row">
         <label class="field">
@@ -275,7 +308,7 @@
           <i class="fa-solid fa-stop"></i><span>Stop</span>
         </button>
         <button id="sysClear" class="btn ghost" type="button">
-          <i class="fa-solid fa-eraser"></i><span>Clear</span>
+          <i class="fa-solid fa-eraser"></i><span>Clear transcript</span>
         </button>
         <label class="field">
           <span>Whisper model</span>
@@ -313,12 +346,54 @@
         <div class="progress-fill" id="sysProgressFill"></div>
       </div>
       <p class="hint">
-        <strong>How it works:</strong> <code>getDisplayMedia({audio:true})</code> → 16 kHz PCM via
-        <code>ScriptProcessorNode</code> → sliding 9 s window → Whisper worker every ~3 s →
-        only newly appearing content is emitted. No monitor playback, so no echo loop.
-        If your browser lacks <code>getDisplayMedia</code> (mobile, some Firefox builds),
-        pick <b>Microphone</b> instead — same Whisper pipeline, just a different audio source.
+        <strong>Pipeline:</strong>
+        <code>Source</code> → <code>Capture (PCM @ native rate)</code> → <code>WAV chunks (~10 s)</code> →
+        <code>Whisper (16 kHz, sliding 9 s window)</code> → <code>Export</code>.
+        If your browser lacks <code>getDisplayMedia</code>, pick <b>Microphone</b> — same pipeline, different source.
       </p>
+    </div>
+
+    <!-- === NEW: Recording session card === -->
+    <div class="card">
+      <h2>Recording session <span id="sysRecBadge" class="badge-rec" hidden><i class="fa-solid fa-circle" style="font-size:6px"></i> REC</span></h2>
+      <p class="desc">Chunked WAV archive runs in parallel with live captions. Download the full session or individual chunks.</p>
+
+      <div class="pipeline" id="sysPipeline">
+        <div class="pipe-step" data-step="source"><i class="fa-solid fa-signal"></i><span>Source</span></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" data-step="capture"><i class="fa-solid fa-wave-square"></i><span>Capture</span></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" data-step="chunk"><i class="fa-solid fa-cube"></i><span>WAV chunks</span></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" data-step="transcribe"><i class="fa-solid fa-language"></i><span>Whisper</span></div>
+        <div class="pipe-arrow">→</div>
+        <div class="pipe-step" data-step="export"><i class="fa-solid fa-download"></i><span>Export</span></div>
+      </div>
+
+      <div class="rec-stats">
+        <div class="rec-stat"><span>Duration</span><b id="sysRecDuration">0:00</b></div>
+        <div class="rec-stat"><span>Sample rate</span><b id="sysRecRate">–</b></div>
+        <div class="rec-stat"><span>Chunks</span><b id="sysRecChunkCount">0</b></div>
+        <div class="rec-stat"><span>Size</span><b id="sysRecSize">0 B</b></div>
+      </div>
+
+      <div class="level-meter" id="sysLevelMeter"></div>
+
+      <div class="row" style="margin-top:14px">
+        <button id="sysRecWav" class="btn primary" type="button" disabled>
+          <i class="fa-solid fa-download"></i>Download full WAV
+        </button>
+        <button id="sysRecMeta" class="btn" type="button" disabled>
+          <i class="fa-solid fa-download"></i>Download metadata JSON
+        </button>
+        <button id="sysRecClear" class="btn ghost" type="button" disabled>
+          <i class="fa-solid fa-trash"></i>Clear recordings
+        </button>
+      </div>
+
+      <div class="chunk-list" id="sysChunkList">
+        <div class="chunk-empty">No chunks yet — start capture to record.</div>
+      </div>
     </div>
 
     <div class="card">
@@ -349,7 +424,7 @@
     </div>
 
     <div class="card">
-      <h2>Export</h2>
+      <h2>Transcript export</h2>
       <div class="row">
         <button id="sysAssBtn" class="btn primary" type="button"><i class="fa-solid fa-download"></i>.ASS (styled)</button>
         <button id="sysSrtBtn" class="btn" type="button" disabled><i class="fa-solid fa-download"></i>.SRT</button>
@@ -476,7 +551,7 @@
 
 <footer>
   Mic mode uses the Web Speech API. System-audio and file modes use <code>@xenova/transformers</code> (Whisper) — 100% client-side.
-  Models are cached in the browser after first download.
+  Models are cached in the browser after first download. WAV chunks are stored in memory only — nothing is uploaded.
 </footer>
 
 <script>
@@ -508,11 +583,48 @@
   };
   function downloadBlob(name, content, mime) {
     var blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
+    downloadBlobFile(blob, name);
+  }
+  function downloadBlobFile(blob, name) {
     var url = URL.createObjectURL(blob);
     var a = document.createElement('a');
     a.href = url; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+  }
+  function humanSize(bytes) {
+    if (!bytes) return '0 B';
+    var u = ['B', 'KB', 'MB', 'GB'], i = 0;
+    while (bytes >= 1024 && i < u.length - 1) { bytes /= 1024; i++; }
+    return bytes.toFixed(bytes >= 100 || i === 0 ? 0 : 1) + ' ' + u[i];
+  }
+
+  // WAV encoder (Float32 mono → 16-bit PCM WAV Blob)
+  function encodeWavBlob(samples, sampleRate) {
+    var numSamples = samples.length;
+    var buffer = new ArrayBuffer(44 + numSamples * 2);
+    var view = new DataView(buffer);
+    function w(off, s) { for (var i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); }
+    w(0, 'RIFF');
+    view.setUint32(4, 36 + numSamples * 2, true);
+    w(8, 'WAVE');
+    w(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);            // PCM
+    view.setUint16(22, 1, true);            // mono
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true); // byte rate
+    view.setUint16(32, 2, true);            // block align
+    view.setUint16(34, 16, true);           // bits per sample
+    w(36, 'data');
+    view.setUint32(40, numSamples * 2, true);
+    var off = 44;
+    for (var i = 0; i < numSamples; i++, off += 2) {
+      var s = samples[i];
+      if (s > 1) s = 1; else if (s < -1) s = -1;
+      view.setInt16(off, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
   }
 
   // Secure context warning
@@ -538,7 +650,7 @@
   });
 
   // ============================================================
-  // ASS GENERATOR (JS port of build_ass)
+  // ASS GENERATOR
   // ============================================================
   function toAssTime(t) {
     var cs = Math.round(t * 100);
@@ -1009,7 +1121,7 @@
   });
 
   // ============================================================
-  // ============ MODE 2: SYSTEM / MIC → WHISPER ============
+  // ============ MODE 2: SYSTEM / MIC → WHISPER + WAV RECORDER ============
   // ============================================================
   var sysEl = {
     source: $('sysSource'),
@@ -1024,7 +1136,15 @@
     cueCount: $('sysCueCount'), wordCount: $('sysWordCount'),
     assBtn: $('sysAssBtn'), srtBtn: $('sysSrtBtn'), vttBtn: $('sysVttBtn'),
     txtBtn: $('sysTxtBtn'), jsonBtn: $('sysJsonBtn'),
-    capWarn: $('sysCapWarn')
+    capWarn: $('sysCapWarn'),
+    // Recorder UI
+    recBadge: $('sysRecBadge'),
+    pipeline: $('sysPipeline'),
+    recDuration: $('sysRecDuration'), recRate: $('sysRecRate'),
+    recChunkCount: $('sysRecChunkCount'), recSize: $('sysRecSize'),
+    levelMeter: $('sysLevelMeter'),
+    recWav: $('sysRecWav'), recMeta: $('sysRecMeta'), recClear: $('sysRecClear'),
+    chunkList: $('sysChunkList')
   };
 
   var sysWhisper = createWhisperClient();
@@ -1032,12 +1152,14 @@
   var sysState = {
     running: false,
     capturing: false,
-    sourceMode: 'display',       // 'display' | 'mic'
+    sourceMode: 'display',
     stream: null,
     audioCtx: null,
     processor: null,
     source: null,
     gainNode: null,
+    analyser: null,
+    analysisRAF: 0,
     buffer: new Float32Array(0),
     absSampleOffset: 0,
     totalSamples: 0,
@@ -1052,7 +1174,15 @@
     modelLoading: false,
     modelName: null,
     tickInProgress: false,
-    fatal: null
+    fatal: null,
+    // Recorder
+    recordingActive: false,
+    recChunks: [],           // [{index,startSec,endSec,sampleRate,blob,sizeBytes}]
+    chunkAccum: new Float32Array(0),
+    chunkStartSec: 0,
+    chunkSec: 10,
+    recUiInterval: null,
+    recUiLastCount: -1
   };
 
   function sysSetStatus(kind, text) {
@@ -1124,6 +1254,173 @@
     }
   });
 
+  // ─── Recorder UI ─────────────────────────────────────────────
+  function initLevelMeter() {
+    sysEl.levelMeter.innerHTML = '';
+    for (var i = 0; i < 24; i++) {
+      var b = document.createElement('i');
+      sysEl.levelMeter.appendChild(b);
+    }
+  }
+  function updateLevelBars(norm) {
+    var bars = sysEl.levelMeter.querySelectorAll('i');
+    var active = Math.round(norm * bars.length);
+    for (var i = 0; i < bars.length; i++) {
+      bars[i].classList.toggle('on', i < active);
+    }
+  }
+  function sysStartMeter() {
+    sysStopMeter();
+    var buf = new Float32Array(1024);
+    function tick() {
+      if (!sysState.capturing || !sysState.analyser) return;
+      sysState.analyser.getFloatTimeDomainData(buf);
+      var sum = 0;
+      for (var i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      var rms = Math.sqrt(sum / buf.length);
+      var norm = Math.min(1, rms * 4);
+      updateLevelBars(norm);
+      sysState.analysisRAF = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+  function sysStopMeter() {
+    if (sysState.analysisRAF) { cancelAnimationFrame(sysState.analysisRAF); sysState.analysisRAF = 0; }
+    updateLevelBars(0);
+  }
+  function updatePipelineStep(name, active) {
+    var el = sysEl.pipeline.querySelector('[data-step="' + name + '"]');
+    if (el) el.classList.toggle('active', !!active);
+  }
+  function formatDuration(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+    return (h ? h + ':' : '') + pad(m) + ':' + pad(s);
+  }
+  function sysRefreshRecorderUI() {
+    var rate = sysState.sampleRate || 0;
+    var totalBytes = 0;
+    for (var i = 0; i < sysState.recChunks.length; i++) totalBytes += sysState.recChunks[i].sizeBytes;
+    if (sysState.chunkAccum.length) totalBytes += sysState.chunkAccum.length * 2;
+    var dur = rate > 0 ? sysState.totalSamples / rate : 0;
+
+    sysEl.recDuration.textContent = formatDuration(dur);
+    sysEl.recRate.textContent = rate ? (rate / 1000).toFixed(1) + ' kHz' : '–';
+    sysEl.recChunkCount.textContent = sysState.recChunks.length;
+    sysEl.recSize.textContent = humanSize(totalBytes);
+    sysEl.recSize.classList.toggle('warn', totalBytes > 200 * 1024 * 1024);
+
+    var has = sysState.recChunks.length > 0 || sysState.chunkAccum.length > 0;
+    sysEl.recWav.disabled = !has;
+    sysEl.recMeta.disabled = !has;
+    sysEl.recClear.disabled = !has;
+    sysEl.recBadge.hidden = !sysState.recordingActive;
+
+    updatePipelineStep('source', sysState.capturing);
+    updatePipelineStep('capture', sysState.capturing);
+    updatePipelineStep('chunk', sysState.recordingActive);
+    updatePipelineStep('transcribe', sysState.modelReady);
+    updatePipelineStep('export', has);
+  }
+  function sysRenderChunkList() {
+    if (sysState.recUiLastCount === sysState.recChunks.length) return;
+    sysState.recUiLastCount = sysState.recChunks.length;
+    if (!sysState.recChunks.length) {
+      sysEl.chunkList.innerHTML = '<div class="chunk-empty">No chunks yet — start capture to record.</div>';
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < sysState.recChunks.length; i++) {
+      var c = sysState.recChunks[i];
+      html += '<div class="chunk-item">' +
+        '<span class="chunk-idx">#' + (c.index + 1) + '</span>' +
+        '<span class="chunk-time">' + formatDuration(c.startSec) + ' → ' + formatDuration(c.endSec) + '</span>' +
+        '<span class="chunk-size">' + humanSize(c.sizeBytes) + '</span>' +
+        '<button class="btn ghost chunk-dl" data-idx="' + i + '"><i class="fa-solid fa-download"></i></button>' +
+        '</div>';
+    }
+    sysEl.chunkList.innerHTML = html;
+    var btns = sysEl.chunkList.querySelectorAll('.chunk-dl');
+    btns.forEach(function (b) {
+      b.addEventListener('click', function () {
+        var idx = parseInt(b.getAttribute('data-idx'), 10);
+        var c = sysState.recChunks[idx];
+        if (c) downloadBlobFile(c.blob, 'chunk_' + pad(c.index + 1, 3) + '_' + fileStamp() + '.wav');
+      });
+    });
+  }
+
+  async function sysDownloadFullWav() {
+    var parts = [];
+    var totalPcm = 0;
+    for (var i = 0; i < sysState.recChunks.length; i++) {
+      var ab = await sysState.recChunks[i].blob.arrayBuffer();
+      var pcm = new Uint8Array(ab, 44); // strip 44-byte WAV header
+      parts.push(pcm);
+      totalPcm += pcm.length;
+    }
+    if (sysState.chunkAccum.length) {
+      var wavBlob = encodeWavBlob(sysState.chunkAccum, sysState.sampleRate);
+      var ab2 = await wavBlob.arrayBuffer();
+      var pcm2 = new Uint8Array(ab2, 44);
+      parts.push(pcm2);
+      totalPcm += pcm2.length;
+    }
+    if (!totalPcm) return;
+
+    var header = new ArrayBuffer(44);
+    var view = new DataView(header);
+    function w(off, s) { for (var i = 0; i < s.length; i++) view.setUint8(off + i, s.charCodeAt(i)); }
+    w(0, 'RIFF');
+    view.setUint32(4, 36 + totalPcm, true);
+    w(8, 'WAVE');
+    w(12, 'fmt ');
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sysState.sampleRate, true);
+    view.setUint32(28, sysState.sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    w(36, 'data');
+    view.setUint32(40, totalPcm, true);
+
+    var blobParts = [new Uint8Array(header)].concat(parts);
+    var blob = new Blob(blobParts, { type: 'audio/wav' });
+    downloadBlobFile(blob, 'recording_' + fileStamp() + '.wav');
+  }
+
+  function sysDownloadMetadata() {
+    var meta = {
+      source: sysState.sourceMode,
+      sampleRate: sysState.sampleRate,
+      durationSec: sysState.sampleRate ? sysState.totalSamples / sysState.sampleRate : 0,
+      chunkSec: sysState.chunkSec,
+      chunks: sysState.recChunks.map(function (c) {
+        return {
+          index: c.index,
+          startSec: c.startSec,
+          endSec: c.endSec,
+          sampleRate: c.sampleRate,
+          sizeBytes: c.sizeBytes
+        };
+      }),
+      transcript: sysState.segments.map(function (s) {
+        return { start: s.start, end: s.end, text: s.text };
+      })
+    };
+    downloadBlob('recording_' + fileStamp() + '.json', JSON.stringify(meta, null, 2), 'application/json');
+  }
+
+  function sysClearRecordings() {
+    sysState.recChunks = [];
+    sysState.chunkAccum = new Float32Array(0);
+    sysState.chunkStartSec = 0;
+    sysState.recUiLastCount = -1;
+    sysRenderChunkList();
+    sysRefreshRecorderUI();
+  }
+
   // ─── Capability probes ──────────────────────────────────────
   function hasDisplayCapture() {
     try {
@@ -1137,8 +1434,7 @@
   }
   function hasMicCapture() {
     try {
-      return !!(navigator.mediaDevices &&
-                typeof navigator.mediaDevices.getUserMedia === 'function');
+      return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
     } catch (e) { return false; }
   }
   function detectMobile() {
@@ -1149,9 +1445,8 @@
   function sysInitCapabilityUI() {
     var disp = hasDisplayCapture();
     var mic = hasMicCapture();
-    if (disp) return; // all good, nothing to warn about
+    if (disp) return;
 
-    // Disable the display option so users can't pick it and get a confusing error.
     try {
       var dispOpt = sysEl.source.querySelector('option[value="display"]');
       if (dispOpt) {
@@ -1167,17 +1462,13 @@
 
     var reason;
     if (detectMobile()) {
-      reason = 'Mobile browsers (Android Chrome, iOS Safari, etc.) don\'t support ' +
-               'screen/tab audio capture. We\'ve switched you to the <b>Microphone</b> ' +
-               'source, which works with the same Whisper pipeline.';
+      reason = 'Mobile browsers don\'t support screen/tab audio capture. Switched to the <b>Microphone</b> ' +
+               'source — same Whisper + WAV pipeline.';
     } else if (/Firefox/i.test(navigator.userAgent || '')) {
-      reason = 'This Firefox build doesn\'t expose <code>getDisplayMedia</code> ' +
-               '(often missing on Linux without a portal). Use the <b>Microphone</b> source, ' +
-               'or try Chrome / Edge on desktop.';
+      reason = 'This Firefox build doesn\'t expose <code>getDisplayMedia</code>. ' +
+               'Use the <b>Microphone</b> source or try Chrome / Edge on desktop.';
     } else {
-      reason = 'Your browser doesn\'t expose <code>getDisplayMedia</code>. ' +
-               'We\'ve switched you to the <b>Microphone</b> source — speak into your mic ' +
-               'and Whisper will transcribe it. For tab/system audio, use Chrome or Edge on desktop.';
+      reason = 'Your browser doesn\'t expose <code>getDisplayMedia</code>. Switched to the <b>Microphone</b> source.';
     }
     sysEl.capWarn.innerHTML = '<i class="fa-solid fa-circle-info"></i><strong>Tab/System capture unavailable.</strong> ' + reason;
     sysEl.capWarn.classList.add('show');
@@ -1280,7 +1571,7 @@
     sysSetProgress(0);
 
     var mode = sysEl.source.value || 'display';
-    if (mode === 'display' && !hasDisplayCapture()) mode = 'mic'; // last-minute fallback
+    if (mode === 'display' && !hasDisplayCapture()) mode = 'mic';
     if (mode === 'mic' && !hasMicCapture()) {
       sysSetStatus('error', 'Neither tab nor mic capture is available in this browser');
       return;
@@ -1323,7 +1614,6 @@
       return;
     }
 
-    // Video: only in display mode
     var vt = stream.getVideoTracks()[0];
     if (vt) {
       sysEl.video.srcObject = stream;
@@ -1348,22 +1638,37 @@
       var src = ctx.createMediaStreamSource(audioOnly);
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var gain = ctx.createGain();
-      gain.gain.value = mode === 'mic' ? 0 : 0.0001; // truly silent for mic (no feedback)
+      gain.gain.value = 0.0001;
+
+      var analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      analyser.smoothingTimeConstant = 0.4;
+      src.connect(analyser);
 
       sysState.audioCtx = ctx;
       sysState.sampleRate = ctx.sampleRate;
       sysState.source = src;
       sysState.processor = proc;
       sysState.gainNode = gain;
+      sysState.analyser = analyser;
       sysState.stream = stream;
       sysState.buffer = new Float32Array(0);
       sysState.absSampleOffset = 0;
       sysState.totalSamples = 0;
       sysState.transcribedUntil = 0;
 
+      // Recorder state
+      sysState.recChunks = [];
+      sysState.chunkAccum = new Float32Array(0);
+      sysState.chunkStartSec = 0;
+      sysState.recordingActive = true;
+      sysState.recUiLastCount = -1;
+
       proc.onaudioprocess = function (e) {
         if (!sysState.capturing) return;
         var chunk = e.inputBuffer.getChannelData(0);
+
+        // 1) Sliding window for live Whisper (capped)
         var combined = new Float32Array(sysState.buffer.length + chunk.length);
         combined.set(sysState.buffer);
         combined.set(chunk, sysState.buffer.length);
@@ -1375,6 +1680,34 @@
           sysState.absSampleOffset += drop;
         } else {
           sysState.buffer = combined;
+        }
+
+        // 2) Full-rate chunk accumulator for WAV archive
+        if (sysState.recordingActive) {
+          var combined2 = new Float32Array(sysState.chunkAccum.length + chunk.length);
+          combined2.set(sysState.chunkAccum);
+          combined2.set(chunk, sysState.chunkAccum.length);
+          sysState.chunkAccum = combined2;
+          var chunkSamples = Math.round(sysState.chunkSec * sysState.sampleRate);
+          while (sysState.chunkAccum.length >= chunkSamples) {
+            var cut = sysState.chunkAccum.slice(0, chunkSamples);
+            sysState.chunkAccum = sysState.chunkAccum.slice(chunkSamples);
+            var cs = sysState.chunkStartSec;
+            var ce = cs + chunkSamples / sysState.sampleRate;
+            sysState.chunkStartSec = ce;
+            try {
+              var wavBlob = encodeWavBlob(cut, sysState.sampleRate);
+              sysState.recChunks.push({
+                index: sysState.recChunks.length,
+                startSec: cs,
+                endSec: ce,
+                sampleRate: sysState.sampleRate,
+                blob: wavBlob,
+                sizeBytes: wavBlob.size
+              });
+              sysRenderChunkList();
+            } catch (ex) { console.warn('chunk encode failed', ex); }
+          }
         }
       };
 
@@ -1395,10 +1728,18 @@
     sysState.running = true;
     sysEl.start.disabled = true;
     sysEl.stop.disabled = false;
-    sysEl.stage.classList.add('listening');
     sysEl.source.disabled = true;
+    sysEl.stage.classList.add('listening');
     sysState.intervalId = setInterval(sysTick, sysState.strideSec * 1000);
 
+    // Recorder UI
+    initLevelMeter();
+    sysStartMeter();
+    sysState.recUiInterval = setInterval(sysRefreshRecorderUI, 400);
+    sysRenderChunkList();
+    sysRefreshRecorderUI();
+
+    // Load model
     var chosenModel = sysEl.model.value;
     sysState.modelReady = false;
     sysState.modelLoading = true;
@@ -1461,10 +1802,7 @@
         if (sysState.sampleRate !== 16000) {
           window = await resampleTo16k(window, sysState.sampleRate);
         }
-      } catch (e) {
-        console.warn('resample failed', e);
-        return;
-      }
+      } catch (e) { console.warn('resample failed', e); return; }
 
       if (!sysState.running || !sysState.modelReady) return;
 
@@ -1510,10 +1848,34 @@
     if (!sysState.running && !sysState.capturing) return;
     sysState.running = false;
     sysState.capturing = false;
+
+    // Flush any pending partial chunk to the archive
+    if (sysState.chunkAccum.length > 0 && sysState.sampleRate && sysState.recordingActive) {
+      try {
+        var wavBlob = encodeWavBlob(sysState.chunkAccum, sysState.sampleRate);
+        var cs = sysState.chunkStartSec;
+        var ce = cs + sysState.chunkAccum.length / sysState.sampleRate;
+        sysState.recChunks.push({
+          index: sysState.recChunks.length,
+          startSec: cs,
+          endSec: ce,
+          sampleRate: sysState.sampleRate,
+          blob: wavBlob,
+          sizeBytes: wavBlob.size
+        });
+        sysState.chunkStartSec = ce;
+        sysState.chunkAccum = new Float32Array(0);
+      } catch (e) { console.warn('final chunk encode failed', e); }
+    }
+    sysState.recordingActive = false;
+    sysStopMeter();
+    if (sysState.recUiInterval) { clearInterval(sysState.recUiInterval); sysState.recUiInterval = null; }
+
     if (sysState.intervalId) { clearInterval(sysState.intervalId); sysState.intervalId = null; }
     try { if (sysState.processor) sysState.processor.disconnect(); } catch (e) {}
     try { if (sysState.source) sysState.source.disconnect(); } catch (e) {}
     try { if (sysState.gainNode) sysState.gainNode.disconnect(); } catch (e) {}
+    try { if (sysState.analyser) sysState.analyser.disconnect(); } catch (e) {}
     try { if (sysState.audioCtx) await sysState.audioCtx.close(); } catch (e) {}
     try {
       if (sysState.stream) sysState.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
@@ -1522,29 +1884,35 @@
     sysEl.video.hidden = true;
     sysEl.placeholder.style.display = '';
     sysEl.placeholderText.textContent = 'Click “Capture & transcribe” — pick a tab and tick “Share tab audio”.';
+
     sysState.audioCtx = null;
     sysState.processor = null;
     sysState.source = null;
     sysState.gainNode = null;
+    sysState.analyser = null;
     sysState.stream = null;
     sysState.buffer = new Float32Array(0);
     sysState.absSampleOffset = 0;
     sysState.totalSamples = 0;
     sysState.transcribedUntil = 0;
+
     sysEl.start.disabled = false;
     sysEl.stop.disabled = true;
     sysEl.source.disabled = false;
     sysEl.stage.classList.remove('listening');
     sysSetStatus('idle', 'Stopped');
     sysSetProgress(0);
+
+    sysRenderChunkList();
+    sysRefreshRecorderUI();
   }
 
+  // ─── Wiring ─────────────────────────────────────────────────
   sysEl.start.addEventListener('click', function () {
     sysStart().catch(function (e) { console.error(e); sysSetStatus('error', 'Unexpected: ' + (e.message || e)); });
   });
   sysEl.stop.addEventListener('click', sysStop);
   sysEl.clear.addEventListener('click', function () {
-    sysStop();
     sysState.segments = [];
     sysEl.cues.innerHTML = '';
     sysEl.final.classList.add('placeholder');
@@ -1552,16 +1920,19 @@
     sysRefreshUI();
   });
   sysEl.model.addEventListener('change', function () {
-    if (!sysState.capturing) {
-      sysState.modelReady = false;
-      sysState.modelName = null;
-    }
+    if (!sysState.capturing) { sysState.modelReady = false; sysState.modelName = null; }
   });
   sysEl.source.addEventListener('change', function () {
     sysState.sourceMode = sysEl.source.value;
   });
 
-  // Exports (unchanged)
+  sysEl.recWav.addEventListener('click', function () {
+    sysDownloadFullWav().catch(function (e) { console.warn(e); });
+  });
+  sysEl.recMeta.addEventListener('click', sysDownloadMetadata);
+  sysEl.recClear.addEventListener('click', sysClearRecordings);
+
+  // Transcript exports
   sysEl.srtBtn.addEventListener('click', function () {
     if (!sysState.segments.length) return;
     var out = '\uFEFF' + sysState.segments.map(function (s, i) {
@@ -1645,12 +2016,6 @@
     if (pct <= 0) { fileEl.progress.hidden = true; fileEl.progressFill.style.width = '0%'; return; }
     fileEl.progress.hidden = false;
     fileEl.progressFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
-  }
-  function humanSize(bytes) {
-    if (!bytes) return '0 B';
-    var u = ['B', 'KB', 'MB', 'GB'], i = 0;
-    while (bytes >= 1024 && i < u.length - 1) { bytes /= 1024; i++; }
-    return bytes.toFixed(bytes >= 100 || i === 0 ? 0 : 1) + ' ' + u[i];
   }
 
   function normalizeWhisperWords(result) {
@@ -1935,6 +2300,8 @@
   }
   micRefreshStats(); micRefreshButtons();
   sysRefreshUI();
+  initLevelMeter();
+  sysRefreshRecorderUI();
   sysInitCapabilityUI();
 
 })();
