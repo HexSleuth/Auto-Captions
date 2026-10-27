@@ -249,7 +249,7 @@
     </div>
   </section>
 
-  <!-- ============ SYSTEM TAB (FIX) ============ -->
+  <!-- ============ SYSTEM TAB ============ -->
   <section id="systemPanel" hidden>
     <div class="card">
       <h2>System / Tab audio → Whisper (In-browser)</h2>
@@ -285,6 +285,7 @@
             <option value="es">Spanish</option>
             <option value="fr">French</option>
             <option value="de">German</option>
+            <option value="it">Italian</option>
             <option value="hi">Hindi</option>
             <option value="ta">Tamil</option>
             <option value="te">Telugu</option>
@@ -304,7 +305,7 @@
       </div>
       <p class="hint">
         <strong>How it works:</strong> <code>getDisplayMedia({audio:true})</code> → 16 kHz PCM via
-        <code>ScriptProcessorNode</code> → sliding 8–10 s window → Whisper worker every ~3 s →
+        <code>ScriptProcessorNode</code> → sliding 9 s window → Whisper worker every ~3 s →
         only newly appearing content is emitted. No monitor playback, so no echo loop.
       </p>
     </div>
@@ -384,6 +385,7 @@
             <option value="es">Spanish</option>
             <option value="fr">French</option>
             <option value="de">German</option>
+            <option value="it">Italian</option>
             <option value="hi">Hindi</option>
             <option value="ja">Japanese</option>
             <option value="zh">Chinese</option>
@@ -638,7 +640,7 @@
   }
 
   // ============================================================
-  // WHISPER WORKER CLIENT (shared template, one instance per use)
+  // WHISPER WORKER CLIENT (with proper load + transcribe)
   // ============================================================
   function createWhisperClient() {
     var worker = null;
@@ -646,6 +648,7 @@
     var pending = new Map();
     var queue = Promise.resolve();
     var onProgressCb = null;
+    var loadedModel = null;
 
     function ensure() {
       if (worker) return;
@@ -656,14 +659,28 @@
         "let transcriber = null, currentModel = null;\n" +
         "self.onmessage = async (e) => {\n" +
         "  const { id, type, audio, model, language, returnTimestamps } = e.data;\n" +
-        "  if (type !== 'transcribe') return;\n" +
-        "  try {\n" +
-        "    if (!transcriber || currentModel !== model) {\n" +
+        "  if (type === 'load') {\n" +
+        "    try {\n" +
+        "      if (transcriber && currentModel === model) {\n" +
+        "        self.postMessage({ id, type: 'loaded', model });\n" +
+        "        return;\n" +
+        "      }\n" +
         "      self.postMessage({ id, type: 'status', status: 'loading' });\n" +
         "      transcriber = await pipeline('automatic-speech-recognition', model, {\n" +
         "        progress_callback: (p) => self.postMessage({ id, type: 'progress', data: p })\n" +
         "      });\n" +
         "      currentModel = model;\n" +
+        "      self.postMessage({ id, type: 'loaded', model });\n" +
+        "    } catch (err) {\n" +
+        "      self.postMessage({ id, type: 'error', error: String((err && (err.stack || err.message)) || err) });\n" +
+        "    }\n" +
+        "    return;\n" +
+        "  }\n" +
+        "  if (type !== 'transcribe') return;\n" +
+        "  try {\n" +
+        "    if (!transcriber || currentModel !== model) {\n" +
+        "      self.postMessage({ id, type: 'error', error: 'Model not loaded: ' + model });\n" +
+        "      return;\n" +
         "    }\n" +
         "    self.postMessage({ id, type: 'status', status: 'transcribing' });\n" +
         "    const opts = { chunk_length_s: 30, stride_length_s: 5, task: 'transcribe' };\n" +
@@ -680,19 +697,37 @@
       worker = new Worker(url, { type: 'module' });
       worker.onmessage = function (e) {
         var d = e.data;
+        if (!d) return;
         if (d.type === 'progress') { if (onProgressCb) onProgressCb(d.data); return; }
         if (d.type === 'status') { if (onProgressCb && d.status) onProgressCb({ status: d.status }); return; }
         if (!d.id || !pending.has(d.id)) return;
         var p = pending.get(d.id);
         pending.delete(d.id);
-        if (d.type === 'result') p.resolve(d.result);
-        else if (d.type === 'error') p.reject(new Error(d.error));
+        if (d.type === 'result' || d.type === 'loaded') p.resolve(d.result || d.model);
+        else if (d.type === 'error') p.reject(new Error(d.error || 'Worker error'));
       };
       worker.onerror = function (err) {
         console.error('[worker]', err);
-        pending.forEach(function (p) { p.reject(new Error('Worker error')); });
+        pending.forEach(function (p) { p.reject(new Error('Worker error: ' + (err && err.message || 'unknown'))); });
         pending.clear();
+        worker = null;
+        loadedModel = null;
       };
+    }
+
+    function load(model) {
+      ensure();
+      if (loadedModel === model) return Promise.resolve(model);
+      var task = queue.then(function () { return doLoad(model); });
+      queue = task.catch(function () {});
+      return task;
+    }
+    function doLoad(model) {
+      var id = nextId++;
+      return new Promise(function (resolve, reject) {
+        pending.set(id, { resolve: resolve, reject: reject });
+        worker.postMessage({ id: id, type: 'load', model: model });
+      }).then(function () { loadedModel = model; return model; });
     }
 
     function transcribe(audio, opts) {
@@ -713,16 +748,21 @@
       });
     }
     return {
+      load: load,
       transcribe: transcribe,
       setProgressHandler: function (fn) { onProgressCb = fn; },
-      terminate: function () { if (worker) { try { worker.terminate(); } catch (e) {} worker = null; } }
+      getLoadedModel: function () { return loadedModel; },
+      terminate: function () {
+        if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
+        loadedModel = null;
+        pending.clear();
+      }
     };
   }
 
   // Resample Float32Array from arbitrary rate to 16 kHz
   async function resampleTo16k(data, fromRate) {
     if (fromRate === 16000) return data;
-    var AC = window.AudioContext || window.webkitAudioContext;
     var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OAC) throw new Error('OfflineAudioContext required for resampling');
     var outLen = Math.max(1, Math.floor(data.length * 16000 / fromRate));
@@ -850,10 +890,7 @@
       micStop();
       return;
     }
-    if (err === 'network') {
-      micSetStatus('error', 'Network error — retrying…');
-      return;
-    }
+    if (err === 'network') { micSetStatus('error', 'Network error — retrying…'); return; }
     micSetStatus('error', 'Error: ' + err);
   }
   function micSpinUp() {
@@ -911,7 +948,6 @@
     var last = micState.segs[micState.segs.length - 1];
     var base = last ? last.end + 0.3 : 0;
     micState.lastEnd = base;
-    // Set t0 so that "now" corresponds to `base` in the timeline
     micState.t0 = performance.now() - base * 1000;
     micEl.start.disabled = true;
     micEl.stop.disabled = false;
@@ -963,7 +999,7 @@
   });
 
   // ============================================================
-  // ============ MODE 2: SYSTEM AUDIO (Whisper, FIXED) ============
+  // ============ MODE 2: SYSTEM AUDIO (Whisper) ============
   // ============================================================
   var sysEl = {
     start: $('sysStart'), stop: $('sysStop'), clear: $('sysClear'),
@@ -982,16 +1018,17 @@
 
   var sysState = {
     running: false,
+    capturing: false,
     stream: null,
     audioCtx: null,
     processor: null,
     source: null,
     gainNode: null,
     buffer: new Float32Array(0),
-    absSampleOffset: 0,   // absolute sample index of buffer[0]
+    absSampleOffset: 0,
     totalSamples: 0,
     sampleRate: 16000,
-    transcribedUntil: 0,  // absolute time (sec) we've already emitted
+    transcribedUntil: 0,
     windowSec: 9,
     strideSec: 3,
     bufferMaxSec: 20,
@@ -1000,6 +1037,7 @@
     modelReady: false,
     modelLoading: false,
     modelName: null,
+    tickInProgress: false,
     fatal: null
   };
 
@@ -1031,7 +1069,6 @@
     if (!text) return;
     if (end <= start) end = start + 0.5;
     var prev = sysState.segments[sysState.segments.length - 1];
-    // Merge if very close and text short
     if (prev && (start - prev.end) < 0.6 && (prev.text.length + text.length) < 90 &&
         !/[.!?…।。？！]$/.test(prev.text)) {
       prev.text = (prev.text + ' ' + text).trim();
@@ -1059,38 +1096,13 @@
     sysEl.transcript.scrollTop = sysEl.transcript.scrollHeight;
   }
 
-  async function sysEnsureModel() {
-    if (sysState.modelReady && sysState.modelName === sysEl.model.value) return;
-    if (sysState.modelLoading) return;
-    sysState.modelLoading = true;
-    sysSetStatus('busy', 'Loading model ' + sysEl.model.value.split('/').pop() + '…');
-    sysSetProgress(1);
-    try {
-      // Warm up by transcribing 0.1s of silence — cheap and forces model load.
-      var silence = new Float32Array(1600);
-      await sysWhisper.transcribe(silence, {
-        model: sysEl.model.value,
-        returnTimestamps: false
-      });
-      sysState.modelReady = true;
-      sysState.modelName = sysEl.model.value;
-      sysSetStatus('', 'Model ready');
-      sysSetProgress(100);
-      setTimeout(function () { sysSetProgress(0); }, 600);
-    } catch (e) {
-      sysState.fatal = e;
-      sysSetStatus('error', 'Model load failed: ' + (e.message || e));
-      sysSetProgress(0);
-      throw e;
-    } finally {
-      sysState.modelLoading = false;
-    }
-  }
-
   sysWhisper.setProgressHandler(function (p) {
     if (!p) return;
     if (p.status === 'loading') { sysSetStatus('busy', 'Loading model…'); return; }
-    if (p.status === 'transcribing') { sysSetStatus('listening', 'Transcribing…'); return; }
+    if (p.status === 'transcribing') {
+      if (sysState.modelReady) sysSetStatus('listening', 'Transcribing…');
+      return;
+    }
     if (p.status === 'progress' && typeof p.progress === 'number') {
       var file = p.file ? p.file.split('/').pop() : '';
       sysSetStatus('busy', 'Downloading ' + file + ' · ' + p.progress.toFixed(0) + '%');
@@ -1100,52 +1112,44 @@
 
   async function sysRequestStream() {
     if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-      var e = new Error('getDisplayMedia not supported');
+      var e = new Error('Screen/tab capture not supported');
       e.name = 'NotSupportedError';
+      e.isMissing = true;
       throw e;
     }
+    // Try from most specific to most permissive. Keep constraints simple —
+    // overconstrained audio can throw NotSupportedError on some Chrome builds.
     var attempts = [
-      {
-        video: { frameRate: 1 },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        },
-        systemAudio: 'include',
-        selfBrowserSurface: 'exclude',
-        surfaceSwitching: 'include'
-      },
       { video: true, audio: true, systemAudio: 'include' },
-      { video: true, audio: true }
+      { video: true, audio: true },
+      { video: { frameRate: 30 }, audio: true }
     ];
     var lastErr = null;
     for (var i = 0; i < attempts.length; i++) {
-      try { return await navigator.mediaDevices.getDisplayMedia(attempts[i]); }
-      catch (err) {
+      try {
+        return await navigator.mediaDevices.getDisplayMedia(attempts[i]);
+      } catch (err) {
         lastErr = err;
         var n = err && err.name;
         if (n === 'NotAllowedError' || n === 'AbortError' || n === 'PermissionDeniedError' ||
-            n === 'SecurityError' || n === 'InvalidStateError') throw err;
+            n === 'SecurityError' || n === 'InvalidStateError') {
+          throw err;
+        }
+        // Other errors (incl. NotSupportedError from a bad constraint combo) → try next
       }
     }
     throw lastErr || new Error('getDisplayMedia failed');
   }
 
   async function sysStart() {
-    if (sysState.running) return;
-    sysSetStatus('busy', 'Preparing…');
-    sysSetProgress(0);
+    if (sysState.running || sysState.capturing) return;
     sysState.fatal = null;
+    sysSetProgress(0);
 
-    // 1) Model ready first (visible progress)
-    try {
-      await sysEnsureModel();
-    } catch (e) {
-      return;
-    }
-
-    // 2) Capture audio
+    // ── 1) Request stream FIRST while user activation is fresh ──
+    // (loading the model can take 30+ s; if we wait, user activation expires
+    //  and getDisplayMedia throws InvalidStateError / NotSupportedError.)
+    sysSetStatus('busy', 'Requesting audio share…');
     var stream;
     try {
       stream = await sysRequestStream();
@@ -1157,28 +1161,36 @@
         return;
       }
       if (name === 'NotSupportedError') {
-        sysSetStatus('error', 'Tab audio capture needs Chrome / Edge on HTTPS');
+        if (err.isMissing) {
+          sysSetStatus('error', 'Browser has no getDisplayMedia — use Chrome / Edge on HTTPS');
+        } else {
+          sysSetStatus('error', 'Capture failed — pick a tab and tick "Share tab audio"');
+        }
         return;
       }
-      sysSetStatus('error', name + ': ' + msg.slice(0, 80));
+      if (name === 'InvalidStateError') {
+        sysSetStatus('error', 'Click "Capture & transcribe" again (user gesture lost)');
+        return;
+      }
+      sysSetStatus('error', name + ': ' + msg.slice(0, 90));
       return;
     }
 
     var audioTracks = stream.getAudioTracks();
     if (!audioTracks.length) {
-      stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
       sysSetStatus('error', 'No audio track — tick "Share tab audio" in the picker');
       return;
     }
 
-    // Show the video track in the stage (keeps the stream alive)
+    // Show the video track (keeps the stream alive in Chrome)
     sysEl.video.srcObject = stream;
     sysEl.video.hidden = false;
     sysEl.placeholder.style.display = 'none';
     sysEl.video.muted = true;
     sysEl.video.play().catch(function () {});
 
-    // 3) Set up PCM capture
+    // ── 2) Set up PCM capture ──
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       var ctx = new AC();
@@ -1188,7 +1200,7 @@
       var src = ctx.createMediaStreamSource(audioOnly);
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var gain = ctx.createGain();
-      gain.gain.value = 0.0001; // near-silent; keeps graph active without echo
+      gain.gain.value = 0.0001; // near-silent, keeps graph active without echo
 
       sysState.audioCtx = ctx;
       sysState.sampleRate = ctx.sampleRate;
@@ -1202,7 +1214,7 @@
       sysState.transcribedUntil = 0;
 
       proc.onaudioprocess = function (e) {
-        if (!sysState.running) return;
+        if (!sysState.capturing) return;
         var chunk = e.inputBuffer.getChannelData(0);
         var combined = new Float32Array(sysState.buffer.length + chunk.length);
         combined.set(sysState.buffer);
@@ -1222,71 +1234,101 @@
       proc.connect(gain);
       gain.connect(ctx.destination);
 
+      sysState.capturing = true;
     } catch (e) {
       try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (x) {}
       sysSetStatus('error', 'Audio pipeline failed: ' + (e.message || e));
       return;
     }
 
-    // 4) Handle the "Stop sharing" button in Chrome
+    // Wire "Stop sharing"
     audioTracks[0].addEventListener('ended', function () { sysStop(); });
     var vt = stream.getVideoTracks()[0];
     if (vt) vt.addEventListener('ended', function () { sysStop(); });
 
+    // ── 3) Start tick loop immediately so audio buffers while model loads ──
     sysState.running = true;
     sysEl.start.disabled = true;
     sysEl.stop.disabled = false;
     sysEl.stage.classList.add('listening');
-    sysSetStatus('listening', 'Capturing · transcribing every ' + sysState.strideSec + 's');
-
-    // 5) Periodic transcription loop
     sysState.intervalId = setInterval(sysTick, sysState.strideSec * 1000);
-    sysTick(); // fire one immediately
+
+    // ── 4) Load model (progress shown) ──
+    var chosenModel = sysEl.model.value;
+    sysState.modelReady = false;
+    sysState.modelLoading = true;
+    sysSetStatus('busy', 'Loading ' + chosenModel.split('/').pop() + '…');
+    sysSetProgress(1);
+
+    try {
+      await sysWhisper.load(chosenModel);
+      if (!sysState.capturing) {
+        // user cancelled while model was loading
+        return;
+      }
+      sysState.modelReady = true;
+      sysState.modelLoading = false;
+      sysState.modelName = chosenModel;
+      sysSetProgress(100);
+      setTimeout(function () { sysSetProgress(0); }, 700);
+      sysSetStatus('listening', 'Capturing · transcribing every ' + sysState.strideSec + 's');
+      // kick off first transcription right away
+      sysTick();
+    } catch (e) {
+      sysState.modelLoading = false;
+      sysState.fatal = e;
+      sysSetStatus('error', 'Model load failed: ' + (e.message || e).slice(0, 90));
+      sysSetProgress(0);
+      await sysStop();
+      return;
+    }
   }
 
   async function sysTick() {
     if (!sysState.running) return;
-    var bufferStartSec = sysState.absSampleOffset / sysState.sampleRate;
-    var bufferEndSec = sysState.totalSamples / sysState.sampleRate;
-    if (bufferEndSec - bufferStartSec < 1.5) return;
+    if (!sysState.modelReady) return;
+    if (sysState.tickInProgress) return;
+    if (!sysState.buffer.length) return;
+    sysState.tickInProgress = true;
 
-    // Window start: max(buffer start, transcribedUntil - 1) so we always have ~1s overlap
-    var windowStartSec = Math.max(bufferStartSec, sysState.transcribedUntil - 1);
-    if (windowStartSec >= bufferEndSec - 0.4) return;
-
-    var startSample = Math.max(0, Math.floor((windowStartSec - bufferStartSec) * sysState.sampleRate));
-    var endSample = sysState.buffer.length;
-    if (endSample - startSample < sysState.sampleRate * 1) return;
-
-    // Cap window length
-    var windowDur = (endSample - startSample) / sysState.sampleRate;
-    if (windowDur > sysState.windowSec) {
-      var trim = Math.floor((windowDur - sysState.windowSec) * sysState.sampleRate);
-      startSample += trim;
-      windowStartSec = bufferStartSec + startSample / sysState.sampleRate;
-    }
-
-    var window = sysState.buffer.slice(startSample, endSample);
-
-    // RMS gate — skip silence to save CPU
-    var sum = 0;
-    for (var i = 0; i < window.length; i++) sum += window[i] * window[i];
-    var rms = Math.sqrt(sum / window.length);
-    if (rms < 0.004) return;
-
-    // Resample to 16k if needed
     try {
-      if (sysState.sampleRate !== 16000) {
-        window = await resampleTo16k(window, sysState.sampleRate);
+      var bufferStartSec = sysState.absSampleOffset / sysState.sampleRate;
+      var bufferEndSec = sysState.totalSamples / sysState.sampleRate;
+      if (bufferEndSec - bufferStartSec < 1.5) return;
+
+      var windowStartSec = Math.max(bufferStartSec, sysState.transcribedUntil - 1);
+      if (windowStartSec >= bufferEndSec - 0.4) return;
+
+      var startSample = Math.max(0, Math.floor((windowStartSec - bufferStartSec) * sysState.sampleRate));
+      var endSample = sysState.buffer.length;
+      if (endSample - startSample < sysState.sampleRate * 1) return;
+
+      var windowDur = (endSample - startSample) / sysState.sampleRate;
+      if (windowDur > sysState.windowSec) {
+        var trim = Math.floor((windowDur - sysState.windowSec) * sysState.sampleRate);
+        startSample += trim;
+        windowStartSec = bufferStartSec + startSample / sysState.sampleRate;
       }
-    } catch (e) {
-      console.warn('resample failed', e);
-      return;
-    }
 
-    if (!sysState.running) return;
+      var window = sysState.buffer.slice(startSample, endSample);
 
-    try {
+      // RMS gate — skip silence to save CPU
+      var sum = 0;
+      for (var i = 0; i < window.length; i++) sum += window[i] * window[i];
+      var rms = Math.sqrt(sum / window.length);
+      if (rms < 0.0035) return;
+
+      try {
+        if (sysState.sampleRate !== 16000) {
+          window = await resampleTo16k(window, sysState.sampleRate);
+        }
+      } catch (e) {
+        console.warn('resample failed', e);
+        return;
+      }
+
+      if (!sysState.running || !sysState.modelReady) return;
+
       var res = await sysWhisper.transcribe(window, {
         model: sysEl.model.value,
         language: sysEl.lang.value || null,
@@ -1305,16 +1347,14 @@
         if (!isFinite(s1) || s1 <= s0) s1 = s0 + 0.4;
         var absStart = windowStartSec + s0;
         var absEnd = windowStartSec + s1;
-        // Only new content
         if (absEnd <= sysState.transcribedUntil + 0.15) continue;
-        if (absStart < sysState.transcribedUntil - 1.5) absStart = sysState.transcribedUntil;
+        if (absStart < sysState.transcribedUntil - 0.3) absStart = sysState.transcribedUntil;
         var txt = String(c.text || '').trim();
         if (!txt) continue;
         newSegs.push({ text: txt, start: absStart, end: absEnd });
         if (absEnd > sysState.transcribedUntil) sysState.transcribedUntil = absEnd;
       }
       if (newSegs.length) {
-        // Combine adjacent short fragments
         var combinedText = newSegs.map(function (s) { return s.text; }).join(' ').replace(/\s+/g, ' ').trim();
         var firstStart = newSegs[0].start;
         var lastEnd = newSegs[newSegs.length - 1].end;
@@ -1322,12 +1362,15 @@
       }
     } catch (e) {
       console.warn('[sys whisper]', e);
+    } finally {
+      sysState.tickInProgress = false;
     }
   }
 
   async function sysStop() {
-    if (!sysState.running) return;
+    if (!sysState.running && !sysState.capturing) return;
     sysState.running = false;
+    sysState.capturing = false;
     if (sysState.intervalId) { clearInterval(sysState.intervalId); sysState.intervalId = null; }
     try { if (sysState.processor) sysState.processor.disconnect(); } catch (e) {}
     try { if (sysState.source) sysState.source.disconnect(); } catch (e) {}
@@ -1347,6 +1390,7 @@
     sysState.buffer = new Float32Array(0);
     sysState.absSampleOffset = 0;
     sysState.totalSamples = 0;
+    sysState.transcribedUntil = 0;
     sysEl.start.disabled = false;
     sysEl.stop.disabled = true;
     sysEl.stage.classList.remove('listening');
@@ -1354,7 +1398,9 @@
     sysSetProgress(0);
   }
 
-  sysEl.start.addEventListener('click', function () { sysStart().catch(function (e) { console.error(e); }); });
+  sysEl.start.addEventListener('click', function () {
+    sysStart().catch(function (e) { console.error(e); sysSetStatus('error', 'Unexpected: ' + (e.message || e)); });
+  });
   sysEl.stop.addEventListener('click', sysStop);
   sysEl.clear.addEventListener('click', function () {
     sysStop();
@@ -1365,8 +1411,11 @@
     sysRefreshUI();
   });
   sysEl.model.addEventListener('change', function () {
-    sysState.modelReady = false;
-    sysState.modelName = null;
+    // Reset only if not currently capturing
+    if (!sysState.capturing) {
+      sysState.modelReady = false;
+      sysState.modelName = null;
+    }
   });
 
   sysEl.srtBtn.addEventListener('click', function () {
@@ -1394,7 +1443,6 @@
   });
   sysEl.assBtn.addEventListener('click', function () {
     if (!sysState.segments.length) return;
-    // Convert segments to word list (approximate split)
     var words = [];
     sysState.segments.forEach(function (s) {
       var parts = s.text.split(/\s+/).filter(Boolean);
@@ -1627,6 +1675,10 @@
       }
       if (fileState.cancelRequested) throw new Error('Cancelled');
 
+      // Ensure model is loaded first
+      await fileWhisper.load(fileEl.model.value);
+      if (fileState.cancelRequested) throw new Error('Cancelled');
+
       var result = await fileWhisper.transcribe(fileState.audioFloat32, {
         model: fileEl.model.value,
         language: fileEl.lang.value || null,
@@ -1678,7 +1730,6 @@
   });
   window.addEventListener('resize', updateKaraokeFont);
 
-  // Rebuild blocks when ASS options change
   ['assWpc', 'assFont', 'assFs', 'assBord', 'assMarginV', 'assMarginLR', 'assPlayres',
    'assPopIn', 'assPopOut', 'assPopExtra', 'assPopBlur', 'assTailHold',
    'assActive', 'assInactive', 'assOutline', 'assUppercase'].forEach(function (id) {
@@ -1747,104 +1798,6 @@
 
 })();
 </script>
-<script>
-// Disable right-click
-document.addEventListener('contextmenu', (e) => e.preventDefault());
 
-function ctrlShiftKey(e, keyCode) {
-  return e.ctrlKey && e.shiftKey && e.keyCode === keyCode.charCodeAt(0);
-}
-
-document.onkeydown = (e) => {
-  // Disable F12, Ctrl + Shift + I, Ctrl + Shift + J, Ctrl + U
-  if (
-    event.keyCode === 123 ||
-    ctrlShiftKey(e, 'I') ||
-    ctrlShiftKey(e, 'J') ||
-    ctrlShiftKey(e, 'C') ||
-    (e.ctrlKey && e.keyCode === 'U'.charCodeAt(0))
-  )
-    return false;
-};
-</script>
-<script>
- if (typeof document.onselectstart!="undefined" ) {
-  document.onselectstart=new Function ("return false" );
- }
- else {
-  document.onmousedown=new Function ("return false" );
-  document.onmouseup=new Function ("return true" );
- }
-</script>
-<script>
-   document.onkeydown = function(e) {
-if(event.keyCode == 123) {
-    return false;
-}
-if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'C'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'X'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'Y'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'Z'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'V'.charCodeAt(0)){
-    return false;
-}
-if (e.keyCode == 67 && e.shiftKey && (e.ctrlKey || e.metaKey)){
-    return false;
-}
-if (e.keyCode == 'J'.charCodeAt(0) && e.altKey && (e.ctrlKey || e.metaKey)){
-    return false;
-}
-if (e.keyCode == 'I'.charCodeAt(0) && e.altKey && (e.ctrlKey || e.metaKey)){
-    return false;
-}
-if ((e.keyCode == 'V'.charCodeAt(0) && e.metaKey) || (e.metaKey && e.altKey)){
-    return false;
-}
-if (e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'S'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'H'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'A'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'F'.charCodeAt(0)){
-    return false;
-}
-if(e.ctrlKey && e.keyCode == 'E'.charCodeAt(0)){
-    return false;
-}
-}
-if (document.addEventListener) {
-    document.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-    }, false);
-}else{
-    document.attachEvent('oncontextmenu', function() {
-    window.event.returnValue = false;
-    });
-}
-</script>
 </body>
 </html>
