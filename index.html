@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#0d1117" />
-<title>Auto Captions · System Audio Listener · Auto Detect · SRT/VTT (No API Key)</title>
-<meta name="description" content="Capture device/tab system audio, transcribe it live with auto language detection, translate captions and export SRT/VTT. No API key required." />
+<title>Auto Captions · System Audio · Auto Detect · SRT/VTT (No API Key)</title>
+<meta name="description" content="Browser-only live captions with system/tab audio capture, auto language detection, caption translation and SRT/VTT export. No API key required." />
 
 <style>
   :root{
@@ -28,7 +28,6 @@
     -webkit-font-smoothing:antialiased;
   }
 
-  /* ---------- Header ---------- */
   .topbar{
     max-width:1080px;margin:0 auto;padding:22px 20px 6px;
     display:flex;align-items:center;justify-content:space-between;
@@ -58,7 +57,6 @@
   }
   .gt-fallback:hover{border-color:var(--accent)}
 
-  /* ---------- Layout ---------- */
   .wrap{max-width:1080px;margin:0 auto;padding:12px 20px 70px}
   .card{
     background:linear-gradient(180deg,#161b22,#12161d);
@@ -72,7 +70,6 @@
   }
   .card .desc{margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.55}
 
-  /* ---------- Stage ---------- */
   .stage{
     position:relative;width:100%;aspect-ratio:16/9;
     background:#05070a;border:1px solid var(--border);border-radius:12px;
@@ -123,7 +120,21 @@
   .fs-btn:hover{background:rgba(48,54,61,.95);border-color:#8b949e}
   .fs-btn svg{width:16px;height:16px}
 
-  /* ---------- Subtitle overlay ---------- */
+  .resume-audio{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:20;padding:14px 24px;
+    background:linear-gradient(180deg,#2f81f7,#1f6feb);color:#fff;
+    border:0;border-radius:12px;font-weight:700;font-size:14px;
+    cursor:pointer;box-shadow:0 10px 30px rgba(47,129,247,.5);
+    font-family:inherit;
+    animation:pulse-scale 2s infinite;
+  }
+  .resume-audio[hidden]{display:none}
+  @keyframes pulse-scale{
+    0%,100%{transform:translate(-50%,-50%) scale(1)}
+    50%{transform:translate(-50%,-50%) scale(1.05)}
+  }
+
   .subs{
     position:absolute;left:0;right:0;bottom:0;
     padding:80px 24px 26px;
@@ -153,7 +164,6 @@
     text-shadow:0 2px 10px rgba(0,0,0,.95);
   }
 
-  /* ---------- Controls ---------- */
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
   .row + .row{margin-top:14px}
   .field{display:flex;flex-direction:column;gap:6px}
@@ -196,6 +206,7 @@
   .btn.stop:hover:not(:disabled){filter:brightness(1.1)}
   .btn.ghost{background:transparent}
   .btn.live{border-color:rgba(63,185,80,.55);color:#7ee787;background:rgba(63,185,80,.1)}
+  .btn.live:hover:not(:disabled){background:rgba(63,185,80,.18);border-color:var(--green)}
 
   .status{
     display:inline-flex;align-items:center;gap:8px;
@@ -214,7 +225,6 @@
     100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}
   }
 
-  /* ---------- Auto-detect chip ---------- */
   .chip{
     display:inline-flex;align-items:center;gap:8px;
     padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:650;
@@ -227,7 +237,6 @@
   .chip[hidden]{display:none}
   .chip.busy{background:rgba(210,153,34,.14);border-color:rgba(210,153,34,.5);color:#ffd8a8}
 
-  /* ---------- Audio meter ---------- */
   .meter-wrap{
     display:flex;align-items:center;gap:12px;margin-top:14px;
   }
@@ -250,7 +259,6 @@
     text-transform:uppercase;color:#7ee787;
   }
 
-  /* ---------- Transcript ---------- */
   .transcript{
     margin-top:14px;max-height:320px;overflow-y:auto;
     border:1px solid var(--border);border-radius:12px;
@@ -284,7 +292,12 @@
   }
   .hint strong{color:#c9d1d9}
   .hint ol{margin:8px 0 0;padding-left:20px}
-  .hint li{margin-bottom:6px}
+  .hint li{margin-bottom:8px}
+  .hint kbd{
+    display:inline-block;padding:1px 5px;border-radius:4px;
+    background:#21262d;border:1px solid var(--border);
+    font-family:ui-monospace,monospace;font-size:11px;
+  }
 
   .warnbox{
     display:none;margin-bottom:18px;padding:13px 16px;border-radius:12px;
@@ -321,7 +334,6 @@
 </head>
 <body>
 
-<!-- ================= HEADER + GTRANSLATE ================= -->
 <header class="topbar">
   <div class="brand">
     <div class="logo">CC</div>
@@ -333,37 +345,34 @@
   <div class="gtranslate_wrapper" id="gtWrapper"></div>
 </header>
 
-<!-- ================= MAIN ================= -->
 <main class="wrap">
 
   <div id="supportWarn" class="warnbox">
     <strong>Browser not supported.</strong> This tool uses the Web Speech API.
-    Please open it in <b>Google Chrome</b>, <b>Microsoft Edge</b> or <b>Safari</b>.
+    Open it in <b>Google Chrome</b>, <b>Microsoft Edge</b> or <b>Safari</b>.
     (Firefox has not implemented <code>SpeechRecognition</code> yet.)
   </div>
 
   <div id="secureWarn" class="warnbox">
     <strong>Microphone blocked.</strong> Speech recognition requires a
     <b>secure context</b>: <code>https://</code> or <code>http://localhost</code>.
-    Opening the file with <code>file://</code> won't work in most browsers.
+    Opening the file with <code>file://</code> won't work.
   </div>
 
   <div id="sysWarn" class="warnbox">
-    <strong>No audio track was shared.</strong> In the Chrome/Edge picker you must
-    tick <code>Share tab audio</code> (tab) or <code>Share system audio</code> (screen)
+    <strong>No audio track was shared.</strong> In the Chrome/Edge picker, tick
+    <code>Share tab audio</code> (tab) or <code>Share system audio</code> (screen)
     before clicking <b>Share</b>. If your OS/browser doesn't offer it, use the
     virtual-cable method described below.
   </div>
 
   <div id="loopWarn" class="warnbox">
-    <strong>Possible echo loop.</strong> You're capturing <em>entire screen</em> audio while
-    monitoring through speakers. The monitor playback gets re-captured and echoes.
-    Fix: choose a <b>single Chrome tab</b> in the picker, or send the monitor to a
-    <b>virtual cable</b> output (see the setup guide), or mute the monitor if your
-    OS default input is already the cable.
+    <strong>Possible echo loop.</strong> You're capturing <em>entire screen</em> audio
+    while monitoring through speakers — the monitor playback gets re-captured and echoes.
+    Fix: capture a <b>single Chrome tab</b> instead, or send the monitor to a
+    <b>virtual cable</b> (see the setup guide below).
   </div>
 
-  <!-- STAGE + SUBTITLES -->
   <section class="card">
     <h2>Subtitle stage</h2>
     <p class="desc">Live subtitles render here. Feed it your microphone, or capture system / tab audio below.</p>
@@ -393,6 +402,8 @@
         </svg>
       </button>
 
+      <button class="resume-audio" id="resumeAudioBtn" type="button" hidden>🔈 Click to enable audio playback</button>
+
       <div class="subs" id="subs">
         <span class="sub-line placeholder" id="subFinal">Press “Start listening” and begin speaking…</span>
         <span class="sub-line trans" id="subTrans" hidden></span>
@@ -401,13 +412,12 @@
     </div>
   </section>
 
-  <!-- CONTROLS -->
   <section class="card">
     <h2>Input source &amp; controls</h2>
     <p class="desc">
-      <b>Microphone</b> transcribes whatever the default input device hears.
-      <b>System / tab audio</b> captures your device's internal sound, then monitors it
-      out loud (or into a virtual cable) so the recogniser can hear it.
+      <b>Microphone</b> transcribes the OS default input.
+      <b>System / tab audio</b> captures your device's internal sound, then
+      <em>monitors</em> it out loud (or into a virtual cable) so the recogniser can hear it.
     </p>
 
     <div class="row">
@@ -518,7 +528,6 @@
       <button id="detectChip" class="chip" type="button" hidden></button>
     </div>
 
-    <!-- monitor controls (system audio only) -->
     <div class="row" id="monitorRow" hidden>
       <div class="field">
         <span>Monitor volume</span>
@@ -554,43 +563,42 @@
     <p class="hint">
       Allow access when prompted. Chrome ends a recognition session after a short silence —
       this page restarts it automatically so you can keep going.
-      Shortcut: <code>Ctrl</code> / <code>⌘</code> + <code>Enter</code> to start or stop.
+      Shortcut: <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Enter</kbd> to start or stop.
     </p>
 
     <p class="hint" id="sysHint" hidden>
       <strong>How the internal listener works.</strong> The Web Speech API only listens to the
-      <em>microphone</em> — it cannot accept a media stream directly. So capturing system audio
+      <em>microphone</em> — it can't accept a media stream directly. So capturing system audio
       means routing that audio back into a microphone input. Two ways:
       <ol>
         <li>
-          <strong>Speakers → mic (zero install).</strong> Choose <b>System / tab audio</b>, click
-          <b>Capture system audio</b>, pick a <b>Chrome tab</b> (not "Entire screen") and tick
-          <b>Share tab audio</b>. Keep <b>Monitor volume</b> audible — your speakers play the tab,
-          the mic hears it, captions appear. Use headphones only if you switch to the cable method.
+          <strong>Speakers → mic (zero install).</strong> Choose <b>System / tab audio</b>,
+          click <b>Capture system audio</b>, pick a <b>Chrome tab</b> (not "Entire screen")
+          and tick <b>Share tab audio</b>. Keep <b>Monitor volume</b> audible — your speakers
+          play the tab, the mic hears it, captions appear. Chrome shows a "Share this tab
+          instead" button in the picker — use that for a single tab.
         </li>
         <li>
-          <strong>Virtual cable (fully internal, silent).</strong> Install a loopback driver —
-          <code>VB-CABLE</code> (Windows), <code>BlackHole</code> (macOS) or
-          <code>PulseAudio null-sink</code> (Linux). Route the app's output into the cable, then
-          set the <b>Monitor output device</b> above to that cable (or route the source app
-          directly in the OS mixer) and set the <b>OS default input</b> to the same cable.
-          Now the recogniser hears the cable directly — keep the monitor <b>muted</b> so nothing
-          plays out loud.
+          <strong>Virtual cable (fully internal, silent).</strong> Install a loopback driver
+          — <code>VB-CABLE</code> (Windows), <code>BlackHole</code> (macOS) or
+          <code>pactl load-module module-null-sink</code> (Linux). In the
+          <b>Monitor output device</b> dropdown pick the cable. Set your
+          <b>OS default microphone</b> to the same cable's output side. Now the recogniser
+          hears the cable directly — no speakers needed, no echo loop possible.
         </li>
       </ol>
-      <strong>Auto-detect:</strong> recognition starts in your browser language; if nothing parses
-      it silently scans common languages, then switches based on script analysis. Click the blue
-      chip to reset.
+      <strong>Auto-detect:</strong> recognition starts in your browser language; if nothing
+      parses it silently scans common languages, then switches based on script analysis.
+      Click the blue chip to reset.
     </p>
   </section>
 
-  <!-- OPTIONAL MEDIA -->
   <section class="card">
     <h2>Optional — caption an audio / video file</h2>
     <p class="desc">
-      Load a file (or drag &amp; drop it onto the stage), play it <b>out loud through your
-      speakers</b>, then press <b>Start listening</b>. Alternatively, with a virtual cable
-      installed you can route the player straight into the recogniser with no speakers at all.
+      Load a file (or drag &amp; drop onto the stage), play it <b>out loud through your
+      speakers</b>, then press <b>Start listening</b>. With a virtual cable installed you
+      can route the player straight into the recogniser with no speakers at all.
     </p>
 
     <div class="row">
@@ -602,7 +610,6 @@
     </div>
   </section>
 
-  <!-- TRANSCRIPT -->
   <section class="card">
     <h2>Transcript &amp; export</h2>
     <p class="desc">Every finalized phrase is timestamped and stored below. Translations (if enabled) are included in exports.</p>
@@ -635,10 +642,8 @@
   Timings are approximate (±0.3 s). Everything runs 100% client-side.
 </footer>
 
-<!-- audio element used to monitor captured system audio -->
-<audio id="monitor" hidden playsinline></audio>
+<audio id="monitor" hidden autoplay playsinline></audio>
 
-<!-- ================= GTRANSLATE (page UI translation) ================= -->
 <script>
   window.gtranslateSettings = {
     "default_language": "en",
@@ -652,7 +657,6 @@
 <script src="https://cdn.gtranslate.net/widgets/latest/dropdown.js" defer
         onerror="window.__gtFailed=true;"></script>
 
-<!-- ================= CAPTIONS ENGINE ================= -->
 <script>
 (function () {
   'use strict';
@@ -663,54 +667,55 @@
   var $ = function (id) { return document.getElementById(id); };
 
   var el = {
-    source:      $('source'),
-    shareField:  $('shareField'),
-    shareBtn:    $('shareBtn'),
-    stopShareBtn:$('stopShareBtn'),
-    monitorRow:  $('monitorRow'),
-    monitor:     $('monitor'),
-    volRange:    $('volRange'),
-    volLabel:    $('volLabel'),
-    muteBtn:     $('muteBtn'),
-    outDev:      $('outDev'),
-    meterWrap:   $('meterWrap'),
-    meterFill:   $('meterFill'),
-    meterLabel:  $('meterLabel'),
-    sysHint:     $('sysHint'),
-    sysWarn:     $('sysWarn'),
-    loopWarn:    $('loopWarn'),
+    source:       $('source'),
+    shareField:   $('shareField'),
+    shareBtn:     $('shareBtn'),
+    stopShareBtn: $('stopShareBtn'),
+    monitorRow:   $('monitorRow'),
+    monitor:      $('monitor'),
+    volRange:     $('volRange'),
+    volLabel:     $('volLabel'),
+    muteBtn:      $('muteBtn'),
+    outDev:       $('outDev'),
+    meterWrap:    $('meterWrap'),
+    meterFill:    $('meterFill'),
+    meterLabel:   $('meterLabel'),
+    sysHint:      $('sysHint'),
+    sysWarn:      $('sysWarn'),
+    loopWarn:     $('loopWarn'),
 
-    lang:        $('lang'),
-    trLang:      $('trLang'),
-    startBtn:    $('startBtn'),
-    stopBtn:     $('stopBtn'),
-    clearBtn:    $('clearBtn'),
-    status:      $('status'),
-    statusText:  $('statusText'),
-    chip:        $('detectChip'),
-    stage:       $('stage'),
-    fsBtn:       $('fsBtn'),
-    placeholder: $('stagePlaceholder'),
-    phText:      $('phText'),
-    player:      $('player'),
-    subFinal:    $('subFinal'),
-    subTrans:    $('subTrans'),
-    subInterim:  $('subInterim'),
-    transcript:  $('transcript'),
-    emptyMsg:    $('emptyMsg'),
-    cueList:     $('cueList'),
-    srtBtn:      $('srtBtn'),
-    vttBtn:      $('vttBtn'),
-    txtBtn:      $('txtBtn'),
-    copyBtn:     $('copyBtn'),
-    cueCount:    $('cueCount'),
-    wordCount:   $('wordCount'),
-    durationEl:  $('duration'),
-    mediaFile:   $('mediaFile'),
-    clearMedia:  $('clearMedia'),
-    supportWarn: $('supportWarn'),
-    secureWarn:  $('secureWarn'),
-    gtWrapper:   $('gtWrapper')
+    lang:         $('lang'),
+    trLang:       $('trLang'),
+    startBtn:     $('startBtn'),
+    stopBtn:      $('stopBtn'),
+    clearBtn:     $('clearBtn'),
+    status:       $('status'),
+    statusText:   $('statusText'),
+    chip:         $('detectChip'),
+    stage:        $('stage'),
+    fsBtn:        $('fsBtn'),
+    resumeBtn:    $('resumeAudioBtn'),
+    placeholder:  $('stagePlaceholder'),
+    phText:       $('phText'),
+    player:       $('player'),
+    subFinal:     $('subFinal'),
+    subTrans:     $('subTrans'),
+    subInterim:   $('subInterim'),
+    transcript:   $('transcript'),
+    emptyMsg:     $('emptyMsg'),
+    cueList:      $('cueList'),
+    srtBtn:       $('srtBtn'),
+    vttBtn:       $('vttBtn'),
+    txtBtn:       $('txtBtn'),
+    copyBtn:      $('copyBtn'),
+    cueCount:     $('cueCount'),
+    wordCount:    $('wordCount'),
+    durationEl:   $('duration'),
+    mediaFile:    $('mediaFile'),
+    clearMedia:   $('clearMedia'),
+    supportWarn:  $('supportWarn'),
+    secureWarn:   $('secureWarn'),
+    gtWrapper:    $('gtWrapper')
   };
 
   /* ============================================================
@@ -746,44 +751,43 @@
      3) State
      ============================================================ */
   var state = {
-    active:   false,
-    rec:      null,
-    timer:    null,
-    ticker:   null,
-    gen:      0,
-    offset:   0,
-    t0:       0,
-    lastEnd:  0,
-    segs:     [],
-    trOn:     false,
-    fails:    0,
-    errs:     0,
-    autoLang: null,
-    scanIdx:  -1,
-    noSpeech: 0,
-    detCand:  null,
-    detStreak:0
+    active:    false,
+    rec:       null,
+    timer:     null,
+    ticker:    null,
+    gen:       0,
+    offset:    0,
+    t0:        0,
+    lastEnd:   0,
+    segs:      [],
+    trOn:      false,
+    fails:     0,
+    errs:      0,
+    autoLang:  null,
+    scanIdx:   -1,
+    noSpeech:  0,
+    detCand:   null,
+    detStreak: 0
   };
 
-  /* Capture state */
   var cap = {
-    stream:   null,
-    actx:     null,
-    analyser: null,
-    data:     null,
-    raf:      0,
-    volume:   0.65,
-    muted:    false,
-    wholeScreen: false
+    stream:      null,
+    actx:        null,
+    analyser:    null,
+    data:        null,
+    raf:         0,
+    volume:      0.65,
+    muted:       false,
+    wholeScreen: false,
+    cableMode:   false
   };
 
   /* ============================================================
      4) Language helpers
      ============================================================ */
   function browserLang() {
-    var l = (navigator.languages && navigator.languages[0]) ||
-            navigator.language || 'en-US';
-    return String(l);
+    return String((navigator.languages && navigator.languages[0]) ||
+                   navigator.language || 'en-US');
   }
 
   function langName(code) {
@@ -792,7 +796,8 @@
     if (opt) {
       var txt = opt.textContent.trim();
       var dash = txt.indexOf('—');
-      return (dash > -1 ? txt.slice(0, dash) : txt).replace(/^[^\p{L}]+/u, '').trim() || code;
+      var clean = (dash > -1 ? txt.slice(0, dash) : txt).trim();
+      return clean.replace(/^[^\p{L}]+/u, '').trim() || code;
     }
     return code;
   }
@@ -911,7 +916,9 @@
   }
 
   function getCookie(name) {
-    var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.*+?^${}()|[\]\\])/g, '\\$1') + '=([^;]*)'));
+    var m = document.cookie.match(new RegExp(
+      '(?:^|; )' + name.replace(/([.*+?^${}()|[\]\\])/g, '\\$1') + '=([^;]*)'
+    ));
     return m ? decodeURIComponent(m[1]) : null;
   }
 
@@ -932,6 +939,11 @@
     var p = pageTargetLang();
     if (p) return p.split('-')[0];
     return (browserLang() || 'en').split('-')[0];
+  }
+
+  function isCableLabel(label) {
+    return /cable|blackhole|loopback|virtual|vb-audio|vb-cable|soundflower|null output|monitor of/i
+      .test(label || '');
   }
 
   /* ============================================================
@@ -989,6 +1001,50 @@
     flashTimer = setTimeout(updateLangHint, 2400);
   }
 
+  function updateSubs() {
+    var last = state.segs[state.segs.length - 1];
+
+    if (last) {
+      el.subFinal.classList.remove('placeholder');
+      el.subFinal.textContent = last.text;
+
+      if (state.trOn && last.tr) {
+        el.subTrans.textContent = last.tr;
+        el.subTrans.hidden = false;
+      } else {
+        el.subTrans.textContent = '';
+        el.subTrans.hidden = true;
+      }
+    } else {
+      el.subFinal.classList.add('placeholder');
+      el.subFinal.textContent = 'Press “Start listening” and begin speaking…';
+      el.subTrans.textContent = '';
+      el.subTrans.hidden = true;
+    }
+  }
+
+  function updateSourceUI() {
+    var isSys = el.source.value === 'system';
+    el.shareField.hidden = !isSys;
+    el.monitorRow.hidden = !isSys;
+    el.sysHint.hidden    = !isSys;
+
+    if (!isSys) {
+      el.sysWarn.classList.remove('show');
+      el.loopWarn.classList.remove('show');
+    }
+
+    if (isSys) {
+      if (cap.stream) {
+        el.phText.textContent = 'System audio captured — press “Start listening”';
+      } else {
+        el.phText.textContent = 'Press “Capture system audio”, then “Start listening”';
+      }
+    } else if (!state.active) {
+      el.phText.textContent = 'Press “Start listening” and begin speaking…';
+    }
+  }
+
   /* ============================================================
      7) Transcript rows
      ============================================================ */
@@ -1035,32 +1091,7 @@
   }
 
   /* ============================================================
-     8) Live subtitle overlay
-     ============================================================ */
-  function updateSubs() {
-    var last = state.segs[state.segs.length - 1];
-
-    if (last) {
-      el.subFinal.classList.remove('placeholder');
-      el.subFinal.textContent = last.text;
-
-      if (state.trOn && last.tr) {
-        el.subTrans.textContent = last.tr;
-        el.subTrans.hidden = false;
-      } else {
-        el.subTrans.textContent = '';
-        el.subTrans.hidden = true;
-      }
-    } else {
-      el.subFinal.classList.add('placeholder');
-      el.subFinal.textContent = 'Press “Start listening” and begin speaking…';
-      el.subTrans.textContent = '';
-      el.subTrans.hidden = true;
-    }
-  }
-
-  /* ============================================================
-     9) Caption translation
+     8) Caption translation
      ============================================================ */
   var trCache = Object.create(null);
   var trFailures = 0;
@@ -1073,7 +1104,7 @@
               '?client=gtx&dj=1&sl=auto&tl=' + encodeURIComponent(target) +
               '&dt=t&q=' + encodeURIComponent(text);
 
-    return fetch(url, { method: 'GET' }).then(function (res) {
+    return fetch(url).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     }).then(function (data) {
@@ -1114,7 +1145,7 @@
   }
 
   /* ============================================================
-     10) Auto-detect logic
+     9) Auto-detect
      ============================================================ */
   function applyAutoLang(code, reason) {
     state.autoLang  = code;
@@ -1156,7 +1187,7 @@
   }
 
   /* ============================================================
-     11) Finalize a phrase
+     10) Finalize a phrase
      ============================================================ */
   function finalize(raw) {
     var text = String(raw || '').replace(/\s+/g, ' ').trim();
@@ -1203,7 +1234,7 @@
   }
 
   /* ============================================================
-     12) Recognition lifecycle
+     11) Recognition lifecycle
      ============================================================ */
   function handleError(ev) {
     var err = ev && ev.error;
@@ -1265,7 +1296,6 @@
 
     rec.onresult = function (ev) {
       if (myGen !== state.gen) return;
-
       state.noSpeech = 0;
       var interim = '';
 
@@ -1326,7 +1356,7 @@
   }
 
   /* ============================================================
-     13) SYSTEM AUDIO CAPTURE
+     12) System audio capture
      ============================================================ */
   function drawMeter() {
     if (!cap.analyser || !cap.data) return;
@@ -1338,17 +1368,19 @@
     var db  = 20 * Math.log10(rms || 1e-8);
 
     var pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
-    el.meterFill.style.width = pct.toFixed(1) + '%';
+    el.meterFill.style.width  = pct.toFixed(1) + '%';
     el.meterLabel.textContent = db > -100 ? db.toFixed(1) + ' dB' : '—';
 
     cap.raf = requestAnimationFrame(drawMeter);
   }
 
   function refreshOutputDevices() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
-    navigator.mediaDevices.enumerateDevices().then(function (devs) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
+      return Promise.resolve();
+    }
+    return navigator.mediaDevices.enumerateDevices().then(function (devs) {
       var outs = devs.filter(function (d) { return d.kind === 'audiooutput'; });
-      var cur = el.outDev.value;
+      var cur  = el.outDev.value;
       el.outDev.innerHTML = '<option value="">System default</option>';
       outs.forEach(function (d, i) {
         var o = document.createElement('option');
@@ -1360,10 +1392,158 @@
     }).catch(function () {});
   }
 
-  function applySink() {
-    if (!el.monitor.setSinkId) return;
+  async function applySink() {
+    if (!el.monitor.setSinkId) {
+      if (el.outDev.value) {
+        el.outDev.value = '';
+        setStatus('error', 'Device routing not supported in this browser');
+      }
+      return;
+    }
     var id = el.outDev.value;
-    el.monitor.setSinkId(id || '').catch(function () {});
+    try {
+      await el.monitor.setSinkId(id || '');
+      var opt   = el.outDev.selectedOptions[0];
+      var label = (opt && opt.textContent) || 'System default';
+
+      if (id && isCableLabel(label)) {
+        cap.cableMode = true;
+        el.loopWarn.classList.remove('show');
+        el.muteBtn.textContent = '🔊 Cable (silent)';
+        el.muteBtn.classList.add('live');
+        setStatus('listening', 'Loopback → ' + label);
+      } else {
+        cap.cableMode = false;
+        el.muteBtn.classList.remove('live');
+        el.muteBtn.textContent = cap.muted ? '🔇 Muted' : '🔊 Audible';
+        if (id) setStatus('listening', 'Output: ' + label);
+        if (cap.wholeScreen && !cap.muted) el.loopWarn.classList.add('show');
+      }
+    } catch (err) {
+      console.warn('[applySink] setSinkId failed:', err);
+      setStatus('error', 'Cannot route to that device');
+    }
+  }
+
+  async function startSystemCapture() {
+    if (cap.stream) return true;
+
+    el.sysWarn.classList.remove('show');
+    el.loopWarn.classList.remove('show');
+    setStatus('', 'Opening capture picker…');
+
+    /* Create AudioContext INSIDE the user gesture so it starts "running". */
+    var actx = null;
+    try {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC({ latencyHint: 'interactive' });
+      if (actx.state === 'suspended') actx.resume().catch(function () {});
+    } catch (e) { actx = null; }
+
+    /* Single picker. On NotAllowedError we stop — no second prompt. */
+    var stream = null;
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { frameRate: 5 },
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl:  false,
+          channelCount: 2
+        }
+      });
+    } catch (err) {
+      try { if (actx) actx.close(); } catch (x) {}
+      var name = err && err.name;
+      if (name === 'NotAllowedError' || name === 'AbortError') {
+        setStatus('idle', 'Share cancelled');
+      } else if (name === 'NotSupportedError') {
+        setStatus('error', 'Capture not supported here');
+      } else {
+        setStatus('error', 'Capture failed: ' + (name || 'unknown'));
+      }
+      return false;
+    }
+
+    /* Verify an audio track actually came through. */
+    var audioTracks = stream.getAudioTracks().filter(function (t) {
+      return t.readyState === 'live';
+    });
+    if (!audioTracks.length) {
+      stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      try { if (actx) actx.close(); } catch (e) {}
+      el.sysWarn.classList.add('show');
+      setStatus('error', 'No audio — tick "Share tab audio"');
+      return false;
+    }
+
+    /* Whole-screen detection (potential loop). */
+    var vt = stream.getVideoTracks()[0];
+    if (vt) {
+      var s = vt.getSettings ? vt.getSettings() : {};
+      cap.wholeScreen = s.displaySurface === 'monitor';
+    }
+
+    var audioOnly = new MediaStream(audioTracks);
+
+    /* Monitor playback. autoplay attribute is on the element; volume/mute set here. */
+    el.monitor.srcObject = audioOnly;
+    el.monitor.volume    = cap.volume;
+    el.monitor.muted     = cap.muted;
+    el.resumeBtn.hidden  = true;
+
+    try {
+      await el.monitor.play();
+    } catch (err) {
+      console.warn('[monitor] play() blocked:', err && err.name);
+      el.resumeBtn.hidden = false;
+    }
+
+    /* Analyser for the input meter. */
+    var analyser = null, data = null;
+    if (actx) {
+      try {
+        if (actx.state === 'suspended') await actx.resume();
+        var msrc = actx.createMediaStreamSource(audioOnly);
+        analyser = actx.createAnalyser();
+        analyser.fftSize = 1024;
+        analyser.smoothingTimeConstant = 0.6;
+        msrc.connect(analyser);
+        data = new Float32Array(analyser.fftSize);
+      } catch (e) { analyser = null; }
+    }
+
+    /* Commit state. */
+    cap.stream   = stream;
+    cap.actx     = actx;
+    cap.analyser = analyser;
+    cap.data     = data;
+
+    el.meterWrap.hidden = false;
+    if (analyser) drawMeter();
+    else el.meterLabel.textContent = 'n/a';
+
+    /* Handle "Stop sharing" from the browser bar. */
+    audioTracks[0].addEventListener('ended', function () {
+      endCapture();
+      if (state.active) stopAll();
+    });
+
+    /* Populate devices + route to the current selection. */
+    await refreshOutputDevices();
+    await applySink();
+
+    el.shareBtn.classList.add('live');
+    el.shareBtn.textContent = '✅ Capturing audio';
+    el.stopShareBtn.disabled = false;
+
+    if (cap.wholeScreen && !cap.muted && !cap.cableMode) {
+      el.loopWarn.classList.add('show');
+    }
+
+    setStatus('listening', 'Audio captured');
+    updateSourceUI();
+    return true;
   }
 
   function endCapture(silent) {
@@ -1378,12 +1558,15 @@
       try { cap.actx.close(); } catch (e) {}
       cap.actx = null;
     }
-    cap.analyser = null;
-    cap.data = null;
+
+    cap.analyser    = null;
+    cap.data        = null;
     cap.wholeScreen = false;
+    cap.cableMode   = false;
 
     try { el.monitor.pause(); el.monitor.srcObject = null; } catch (e) {}
 
+    el.resumeBtn.hidden = true;
     el.meterFill.style.width = '0%';
     el.meterLabel.textContent = '—';
     el.meterWrap.hidden = true;
@@ -1391,135 +1574,15 @@
     el.shareBtn.classList.remove('live');
     el.shareBtn.textContent = '🔗 Capture system audio';
     el.loopWarn.classList.remove('show');
+    el.muteBtn.classList.remove('live');
+    el.muteBtn.textContent = cap.muted ? '🔇 Muted' : '🔊 Audible';
 
     if (!silent) setStatus('idle', 'Capture stopped');
     updateSourceUI();
   }
 
-  function updateSourceUI() {
-    var isSys = el.source.value === 'system';
-    el.shareField.hidden = !isSys;
-    el.monitorRow.hidden = !isSys;
-    el.sysHint.hidden = !isSys;
-    if (!isSys) {
-      el.sysWarn.classList.remove('show');
-      el.loopWarn.classList.remove('show');
-    }
-    if (isSys) {
-      el.phText.textContent = cap.stream
-        ? 'System audio captured — press “Start listening”'
-        : 'Press “Capture system audio”, then “Start listening”';
-    } else if (!state.active) {
-      el.phText.textContent = 'Press “Start listening” and begin speaking…';
-    }
-  }
-
-  function startSystemCapture() {
-    return new Promise(function (resolve) {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        setStatus('error', 'Capture not supported');
-        resolve(false);
-        return;
-      }
-
-      el.sysWarn.classList.remove('show');
-
-      var audioConstraints = {
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl:  false,
-        channelCount: 2
-      };
-
-      var attempt1 = navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 2 },
-        audio: audioConstraints,
-        systemAudio: 'include',
-        surfaceSwitching: 'include',
-        selfBrowserSurface: 'exclude'
-      });
-
-      attempt1.catch(function () {
-        return navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-      }).then(function (stream) {
-        var at = stream.getAudioTracks();
-
-        if (!at.length) {
-          stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
-          el.sysWarn.classList.add('show');
-          setStatus('error', 'No audio track shared');
-          resolve(false);
-          return;
-        }
-
-        /* Detect whole-screen capture (potential monitor loop). */
-        var vt = stream.getVideoTracks()[0];
-        if (vt) {
-          var s = vt.getSettings ? vt.getSettings() : {};
-          cap.wholeScreen = s.displaySurface === 'monitor';
-        }
-
-        cap.stream = stream;
-
-        var audioOnly = new MediaStream(at);
-
-        /* Monitor element: plays the captured audio so the mic can hear it. */
-        el.monitor.srcObject = audioOnly;
-        el.monitor.volume    = cap.volume;
-        el.monitor.muted     = cap.muted;
-        try { el.monitor.play().catch(function () {}); } catch (e) {}
-
-        applySink();
-        refreshOutputDevices();
-
-        /* Analyser for the input meter. */
-        try {
-          var AC = window.AudioContext || window.webkitAudioContext;
-          cap.actx = new AC();
-          var src = cap.actx.createMediaStreamSource(audioOnly);
-          cap.analyser = cap.actx.createAnalyser();
-          cap.analyser.fftSize = 1024;
-          cap.analyser.smoothingTimeConstant = 0.6;
-          src.connect(cap.analyser);
-          cap.data = new Float32Array(cap.analyser.fftSize);
-          el.meterWrap.hidden = false;
-          drawMeter();
-        } catch (e) {
-          el.meterWrap.hidden = false;
-          el.meterLabel.textContent = 'n/a';
-        }
-
-        /* If the user clicks Chrome's "Stop sharing" bar. */
-        at[0].addEventListener('ended', function () {
-          endCapture();
-          if (state.active) stopAll();
-        });
-
-        el.shareBtn.classList.add('live');
-        el.shareBtn.textContent = '✅ Capturing audio';
-        el.stopShareBtn.disabled = false;
-
-        if (cap.wholeScreen && !cap.muted) el.loopWarn.classList.add('show');
-        else el.loopWarn.classList.remove('show');
-
-        setStatus('listening', 'System audio captured');
-        updateSourceUI();
-        resolve(true);
-      }).catch(function (err) {
-        if (err && err.name === 'NotAllowedError') {
-          setStatus('idle', 'Share cancelled');
-        } else if (err && err.name === 'NotSupportedError') {
-          setStatus('error', 'Capture not supported here');
-        } else {
-          setStatus('error', 'Capture failed');
-        }
-        resolve(false);
-      });
-    });
-  }
-
   /* ============================================================
-     14) Start / stop
+     13) Start / stop
      ============================================================ */
   function startTicker() {
     stopTicker();
@@ -1603,7 +1666,7 @@
   }
 
   /* ============================================================
-     15) Exports
+     14) Exports
      ============================================================ */
   function cueBody(seg) {
     return seg.text + (seg.tr ? '\n' + seg.tr : '');
@@ -1645,18 +1708,15 @@
   }
 
   /* ============================================================
-     16) Events — source & capture
+     15) Events — source & capture
      ============================================================ */
   el.source.addEventListener('change', function () {
     try { localStorage.setItem('ac.source', el.source.value); } catch (e) {}
 
-    if (el.source.value === 'mic' && cap.stream) {
-      endCapture(true);
-    }
+    if (el.source.value === 'mic' && cap.stream) endCapture(true);
     updateSourceUI();
 
     if (state.active) {
-      /* Switching source means restarting the recogniser cleanly. */
       if (el.source.value === 'system' && !cap.stream) {
         stopAll();
         start();
@@ -1667,10 +1727,7 @@
   });
 
   el.shareBtn.addEventListener('click', function () {
-    if (cap.stream) {
-      /* already capturing — treat as "re-capture" */
-      endCapture(true);
-    }
+    if (cap.stream) endCapture(true);
     startSystemCapture().then(function (ok) {
       if (ok && !state.active) beginRecognition();
     });
@@ -1681,26 +1738,41 @@
     if (state.active) stopAll();
   });
 
+  el.resumeBtn.addEventListener('click', function () {
+    (async function () {
+      try {
+        if (cap.actx && cap.actx.state === 'suspended') await cap.actx.resume();
+        await el.monitor.play();
+        el.resumeBtn.hidden = true;
+      } catch (err) {
+        setStatus('error', 'Audio unlock failed: ' + (err && err.name));
+      }
+    })();
+  });
+
   el.volRange.addEventListener('input', function () {
     cap.volume = Number(el.volRange.value) / 100;
     el.monitor.volume = cap.volume;
     el.volLabel.textContent = el.volRange.value + '%';
-    if (cap.volume > 0 && !cap.muted) el.muteBtn.textContent = '🔊 Audible';
   });
 
   el.muteBtn.addEventListener('click', function () {
+    if (cap.cableMode) {
+      setStatus('error', 'Cable mode is always silent');
+      return;
+    }
     cap.muted = !cap.muted;
     el.monitor.muted = cap.muted;
     el.muteBtn.textContent = cap.muted ? '🔇 Muted' : '🔊 Audible';
     el.muteBtn.classList.toggle('live', cap.muted);
     if (cap.muted) el.loopWarn.classList.remove('show');
-    else if (cap.wholeScreen && cap.stream) el.loopWarn.classList.add('show');
+    else if (cap.wholeScreen && cap.stream && !cap.cableMode) el.loopWarn.classList.add('show');
   });
 
-  el.outDev.addEventListener('change', applySink);
+  el.outDev.addEventListener('change', function () { applySink(); });
 
   /* ============================================================
-     17) Events — controls
+     16) Events — controls
      ============================================================ */
   el.startBtn.addEventListener('click', start);
   el.stopBtn.addEventListener('click', function () { if (state.active) stopAll(); });
@@ -1829,7 +1901,7 @@
   });
 
   /* ============================================================
-     18) Optional media file
+     17) Optional media file
      ============================================================ */
   function loadMedia(file) {
     if (!file) return;
@@ -1875,7 +1947,7 @@
   });
 
   /* ============================================================
-     19) Follow the page language when translation is "Auto"
+     18) Follow page language when translation is "Auto"
      ============================================================ */
   var lastPageLang = pageTargetLang();
   setInterval(function () {
@@ -1888,7 +1960,7 @@
   }, 1600);
 
   /* ============================================================
-     20) Cleanup
+     19) Cleanup
      ============================================================ */
   window.addEventListener('beforeunload', function () {
     state.active = false;
@@ -1901,7 +1973,7 @@
   });
 
   /* ============================================================
-     21) Init
+     20) Init
      ============================================================ */
   try {
     var savedSource = localStorage.getItem('ac.source');
