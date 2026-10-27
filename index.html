@@ -249,7 +249,7 @@
     </div>
   </section>
 
-  <!-- ============ SYSTEM TAB (FIX) ============ -->
+  <!-- ============ SYSTEM TAB ============ -->
   <section id="systemPanel" hidden>
     <div class="card">
       <h2>System / Tab audio → Whisper (In-browser)</h2>
@@ -502,7 +502,6 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
   }
 
-  // Secure context warning
   if (!window.isSecureContext) $('secureWarn').classList.add('show');
 
   // ============================================================
@@ -638,7 +637,7 @@
   }
 
   // ============================================================
-  // WHISPER WORKER CLIENT (shared template, one instance per use)
+  // WHISPER WORKER CLIENT
   // ============================================================
   function createWhisperClient() {
     var worker = null;
@@ -719,10 +718,8 @@
     };
   }
 
-  // Resample Float32Array from arbitrary rate to 16 kHz
   async function resampleTo16k(data, fromRate) {
     if (fromRate === 16000) return data;
-    var AC = window.AudioContext || window.webkitAudioContext;
     var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OAC) throw new Error('OfflineAudioContext required for resampling');
     var outLen = Math.max(1, Math.floor(data.length * 16000 / fromRate));
@@ -755,7 +752,7 @@
   }
 
   // ============================================================
-  // ============ MODE 1: LIVE MIC (Web Speech API) ============
+  // MODE 1: LIVE MIC (Web Speech API)
   // ============================================================
   var micEl = {
     stage: $('micStage'), placeholder: $('micPlaceholder'),
@@ -911,7 +908,6 @@
     var last = micState.segs[micState.segs.length - 1];
     var base = last ? last.end + 0.3 : 0;
     micState.lastEnd = base;
-    // Set t0 so that "now" corresponds to `base` in the timeline
     micState.t0 = performance.now() - base * 1000;
     micEl.start.disabled = true;
     micEl.stop.disabled = false;
@@ -963,7 +959,7 @@
   });
 
   // ============================================================
-  // ============ MODE 2: SYSTEM AUDIO (Whisper, FIXED) ============
+  // MODE 2: SYSTEM AUDIO (FIXED)
   // ============================================================
   var sysEl = {
     start: $('sysStart'), stop: $('sysStop'), clear: $('sysClear'),
@@ -982,16 +978,17 @@
 
   var sysState = {
     running: false,
+    gen: 0,                   // generation counter → invalidate stale async flows
     stream: null,
     audioCtx: null,
     processor: null,
     source: null,
     gainNode: null,
     buffer: new Float32Array(0),
-    absSampleOffset: 0,   // absolute sample index of buffer[0]
+    absSampleOffset: 0,
     totalSamples: 0,
     sampleRate: 16000,
-    transcribedUntil: 0,  // absolute time (sec) we've already emitted
+    transcribedUntil: 0,
     windowSec: 9,
     strideSec: 3,
     bufferMaxSec: 20,
@@ -999,8 +996,7 @@
     segments: [],
     modelReady: false,
     modelLoading: false,
-    modelName: null,
-    fatal: null
+    modelName: null
   };
 
   function sysSetStatus(kind, text) {
@@ -1008,7 +1004,7 @@
     sysEl.statusText.textContent = text;
   }
   function sysSetProgress(pct) {
-    if (pct <= 0) { sysEl.progress.hidden = true; sysEl.progressFill.style.width = '0%'; return; }
+    if (!pct || pct <= 0) { sysEl.progress.hidden = true; sysEl.progressFill.style.width = '0%'; return; }
     sysEl.progress.hidden = false;
     sysEl.progressFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
   }
@@ -1031,7 +1027,6 @@
     if (!text) return;
     if (end <= start) end = start + 0.5;
     var prev = sysState.segments[sysState.segments.length - 1];
-    // Merge if very close and text short
     if (prev && (start - prev.end) < 0.6 && (prev.text.length + text.length) < 90 &&
         !/[.!?…।。？！]$/.test(prev.text)) {
       prev.text = (prev.text + ' ' + text).trim();
@@ -1059,6 +1054,7 @@
     sysEl.transcript.scrollTop = sysEl.transcript.scrollHeight;
   }
 
+  // Warmup: 1 s of silence (safer for transformers.js than 100 ms)
   async function sysEnsureModel() {
     if (sysState.modelReady && sysState.modelName === sysEl.model.value) return;
     if (sysState.modelLoading) return;
@@ -1066,136 +1062,138 @@
     sysSetStatus('busy', 'Loading model ' + sysEl.model.value.split('/').pop() + '…');
     sysSetProgress(1);
     try {
-      // Warm up by transcribing 0.1s of silence — cheap and forces model load.
-      var silence = new Float32Array(1600);
+      var silence = new Float32Array(16000); // 1 s @ 16 kHz
       await sysWhisper.transcribe(silence, {
         model: sysEl.model.value,
         returnTimestamps: false
       });
       sysState.modelReady = true;
       sysState.modelName = sysEl.model.value;
-      sysSetStatus('', 'Model ready');
-      sysSetProgress(100);
-      setTimeout(function () { sysSetProgress(0); }, 600);
-    } catch (e) {
-      sysState.fatal = e;
-      sysSetStatus('error', 'Model load failed: ' + (e.message || e));
-      sysSetProgress(0);
-      throw e;
     } finally {
       sysState.modelLoading = false;
+      sysSetProgress(0);
     }
   }
 
   sysWhisper.setProgressHandler(function (p) {
     if (!p) return;
-    if (p.status === 'loading') { sysSetStatus('busy', 'Loading model…'); return; }
-    if (p.status === 'transcribing') { sysSetStatus('listening', 'Transcribing…'); return; }
-    if (p.status === 'progress' && typeof p.progress === 'number') {
+    if (p.status === 'loading') {
+      sysSetStatus('busy', 'Loading Whisper model…');
+      return;
+    }
+    if (p.status === 'progress' && typeof p.progress === 'number' && p.progress < 100) {
       var file = p.file ? p.file.split('/').pop() : '';
-      sysSetStatus('busy', 'Downloading ' + file + ' · ' + p.progress.toFixed(0) + '%');
+      sysSetStatus('busy', 'Downloading ' + file + ' · ' + Math.round(p.progress) + '%');
       sysSetProgress(p.progress);
     }
   });
 
+  // ---- getDisplayMedia (FIXED) ----
+  // Uses the SIMPLEST constraints first. The old code used
+  // `video: { frameRate: 1 }` + audio constraints which some Chrome
+  // builds reject with NotSupportedError before ever showing the picker.
   async function sysRequestStream() {
+    if (!window.isSecureContext) {
+      var e = new Error('HTTPS or http://localhost required for screen capture');
+      e.name = 'SecurityError';
+      throw e;
+    }
     if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-      var e = new Error('getDisplayMedia not supported');
+      var e = new Error('getDisplayMedia is not available in this browser');
       e.name = 'NotSupportedError';
       throw e;
     }
-    var attempts = [
-      {
-        video: { frameRate: 1 },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false
-        },
+
+    // Primary: minimal, broadly compatible options.
+    try {
+      return await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
         systemAudio: 'include',
         selfBrowserSurface: 'exclude',
         surfaceSwitching: 'include'
-      },
-      { video: true, audio: true, systemAudio: 'include' },
-      { video: true, audio: true }
-    ];
-    var lastErr = null;
-    for (var i = 0; i < attempts.length; i++) {
-      try { return await navigator.mediaDevices.getDisplayMedia(attempts[i]); }
-      catch (err) {
-        lastErr = err;
-        var n = err && err.name;
-        if (n === 'NotAllowedError' || n === 'AbortError' || n === 'PermissionDeniedError' ||
-            n === 'SecurityError' || n === 'InvalidStateError') throw err;
+      });
+    } catch (err) {
+      var n = err && err.name;
+      // User-driven outcomes → propagate immediately, no retry.
+      if (n === 'NotAllowedError' || n === 'AbortError' ||
+          n === 'PermissionDeniedError' || n === 'SecurityError') {
+        throw err;
       }
+      console.warn('[getDisplayMedia] primary attempt failed:', n, err && err.message);
     }
-    throw lastErr || new Error('getDisplayMedia failed');
+
+    // Fallback: the absolute minimum — drop every optional constraint.
+    console.warn('[getDisplayMedia] retrying with minimal options');
+    return navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
   }
 
   async function sysStart() {
     if (sysState.running) return;
+    sysState.running = true;
+    var myGen = ++sysState.gen;
+
     sysSetStatus('busy', 'Preparing…');
     sysSetProgress(0);
-    sysState.fatal = null;
 
-    // 1) Model ready first (visible progress)
-    try {
-      await sysEnsureModel();
-    } catch (e) {
-      return;
-    }
+    var stream = null, ctx = null, src = null, proc = null, gain = null;
 
-    // 2) Capture audio
-    var stream;
     try {
+      // ---- 1) getUserGesture-sensitive call FIRST ----
+      sysSetStatus('busy', 'Pick a tab or window…');
       stream = await sysRequestStream();
-    } catch (err) {
-      var name = (err && err.name) || 'Error';
-      var msg = (err && err.message) || '';
-      if (name === 'NotAllowedError' || name === 'AbortError' || name === 'PermissionDeniedError') {
-        sysSetStatus('idle', 'Share cancelled');
+      if (myGen !== sysState.gen) {              // superseded by Stop / restart
+        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
         return;
       }
-      if (name === 'NotSupportedError') {
-        sysSetStatus('error', 'Tab audio capture needs Chrome / Edge on HTTPS');
-        return;
+
+      // ---- 2) Must have an audio track ----
+      var audioTracks = stream.getAudioTracks();
+      if (!audioTracks.length) {
+        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+        throw new Error('No audio captured — pick a TAB (not a window) and tick "Share tab audio" at the bottom of the picker');
       }
-      sysSetStatus('error', name + ': ' + msg.slice(0, 80));
-      return;
-    }
 
-    var audioTracks = stream.getAudioTracks();
-    if (!audioTracks.length) {
-      stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
-      sysSetStatus('error', 'No audio track — tick "Share tab audio" in the picker');
-      return;
-    }
+      // ---- 3) Show live preview ----
+      sysEl.video.srcObject = stream;
+      sysEl.video.hidden = false;
+      sysEl.video.muted = true;
+      sysEl.placeholder.style.display = 'none';
+      sysEl.video.play().catch(function () {});
 
-    // Show the video track in the stage (keeps the stream alive)
-    sysEl.video.srcObject = stream;
-    sysEl.video.hidden = false;
-    sysEl.placeholder.style.display = 'none';
-    sysEl.video.muted = true;
-    sysEl.video.play().catch(function () {});
-
-    // 3) Set up PCM capture
-    try {
+      // ---- 4) Build AudioContext while gesture still "warm" ----
       var AC = window.AudioContext || window.webkitAudioContext;
-      var ctx = new AC();
-      await ctx.resume();
+      ctx = new AC();
+      try { await ctx.resume(); } catch (e) {}
+      if (ctx.state === 'suspended') {
+        try { await ctx.resume(); } catch (e) {}
+      }
+      if (ctx.state !== 'running') {
+        throw new Error('AudioContext could not start — click anywhere on the page and try again');
+      }
 
       var audioOnly = new MediaStream(audioTracks);
-      var src = ctx.createMediaStreamSource(audioOnly);
-      var proc = ctx.createScriptProcessor(4096, 1, 1);
-      var gain = ctx.createGain();
-      gain.gain.value = 0.0001; // near-silent; keeps graph active without echo
+      src = ctx.createMediaStreamSource(audioOnly);
+      proc = ctx.createScriptProcessor(4096, 1, 1);
+      gain = ctx.createGain();
+      gain.gain.value = 0.0001; // keep graph alive without audible echo
 
+      // ---- 5) Load Whisper model (can take 10–30 s) ----
+      sysSetStatus('busy', 'Loading Whisper model…');
+      await sysEnsureModel();
+      if (myGen !== sysState.gen) {
+        try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+        try { await ctx.close(); } catch (e) {}
+        return;
+      }
+
+      // ---- 6) Wire the PCM collector ----
+      sysState.stream = stream;
       sysState.audioCtx = ctx;
       sysState.sampleRate = ctx.sampleRate;
       sysState.source = src;
       sysState.processor = proc;
       sysState.gainNode = gain;
-      sysState.stream = stream;
       sysState.buffer = new Float32Array(0);
       sysState.absSampleOffset = 0;
       sysState.totalSamples = 0;
@@ -1222,35 +1220,58 @@
       proc.connect(gain);
       gain.connect(ctx.destination);
 
-    } catch (e) {
-      try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (x) {}
-      sysSetStatus('error', 'Audio pipeline failed: ' + (e.message || e));
-      return;
+      // ---- 7) Stop when the user clicks the browser's "Stop sharing" chip ----
+      audioTracks[0].addEventListener('ended', function () { sysStop(); });
+      var vt = stream.getVideoTracks()[0];
+      if (vt) vt.addEventListener('ended', function () { sysStop(); });
+
+      // ---- 8) UI state ----
+      sysEl.start.disabled = true;
+      sysEl.stop.disabled = false;
+      sysEl.stage.classList.add('listening');
+      sysSetStatus('listening', 'Capturing · transcribing every ' + sysState.strideSec + 's');
+      sysSetProgress(0);
+
+      // ---- 9) Polling loop ----
+      sysState.intervalId = setInterval(sysTick, sysState.strideSec * 1000);
+      setTimeout(sysTick, 1200); // quick first feedback
+
+    } catch (err) {
+      console.error('[sysStart]', err);
+      // Cleanup any partial state
+      try { if (stream) stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+      try { if (ctx) await ctx.close(); } catch (e) {}
+      try { sysEl.video.srcObject = null; } catch (e) {}
+      sysEl.video.hidden = true;
+      sysEl.placeholder.style.display = '';
+      sysEl.start.disabled = false;
+      sysEl.stop.disabled = true;
+      sysEl.stage.classList.remove('listening');
+      sysState.running = false;
+      sysSetProgress(0);
+
+      var n = (err && err.name) || 'Error';
+      var m = (err && err.message) || String(err);
+      if (n === 'NotAllowedError' || n === 'AbortError' || n === 'PermissionDeniedError') {
+        sysSetStatus('idle', 'Share cancelled');
+      } else if (n === 'SecurityError') {
+        sysSetStatus('error', 'HTTPS or localhost required for tab capture');
+      } else if (n === 'NotSupportedError') {
+        sysSetStatus('error', 'This browser cannot capture tab audio — use Chrome or Edge on HTTPS');
+      } else {
+        sysSetStatus('error', m.slice(0, 120));
+      }
     }
-
-    // 4) Handle the "Stop sharing" button in Chrome
-    audioTracks[0].addEventListener('ended', function () { sysStop(); });
-    var vt = stream.getVideoTracks()[0];
-    if (vt) vt.addEventListener('ended', function () { sysStop(); });
-
-    sysState.running = true;
-    sysEl.start.disabled = true;
-    sysEl.stop.disabled = false;
-    sysEl.stage.classList.add('listening');
-    sysSetStatus('listening', 'Capturing · transcribing every ' + sysState.strideSec + 's');
-
-    // 5) Periodic transcription loop
-    sysState.intervalId = setInterval(sysTick, sysState.strideSec * 1000);
-    sysTick(); // fire one immediately
   }
 
   async function sysTick() {
     if (!sysState.running) return;
+    var myGen = sysState.gen;
+
     var bufferStartSec = sysState.absSampleOffset / sysState.sampleRate;
     var bufferEndSec = sysState.totalSamples / sysState.sampleRate;
     if (bufferEndSec - bufferStartSec < 1.5) return;
 
-    // Window start: max(buffer start, transcribedUntil - 1) so we always have ~1s overlap
     var windowStartSec = Math.max(bufferStartSec, sysState.transcribedUntil - 1);
     if (windowStartSec >= bufferEndSec - 0.4) return;
 
@@ -1258,7 +1279,6 @@
     var endSample = sysState.buffer.length;
     if (endSample - startSample < sysState.sampleRate * 1) return;
 
-    // Cap window length
     var windowDur = (endSample - startSample) / sysState.sampleRate;
     if (windowDur > sysState.windowSec) {
       var trim = Math.floor((windowDur - sysState.windowSec) * sysState.sampleRate);
@@ -1268,23 +1288,18 @@
 
     var window = sysState.buffer.slice(startSample, endSample);
 
-    // RMS gate — skip silence to save CPU
+    // RMS gate — skip silence
     var sum = 0;
     for (var i = 0; i < window.length; i++) sum += window[i] * window[i];
     var rms = Math.sqrt(sum / window.length);
     if (rms < 0.004) return;
 
-    // Resample to 16k if needed
     try {
       if (sysState.sampleRate !== 16000) {
         window = await resampleTo16k(window, sysState.sampleRate);
       }
-    } catch (e) {
-      console.warn('resample failed', e);
-      return;
-    }
-
-    if (!sysState.running) return;
+    } catch (e) { console.warn('resample failed', e); return; }
+    if (myGen !== sysState.gen || !sysState.running) return;
 
     try {
       var res = await sysWhisper.transcribe(window, {
@@ -1292,20 +1307,18 @@
         language: sysEl.lang.value || null,
         returnTimestamps: 'word'
       });
-      if (!sysState.running) return;
+      if (myGen !== sysState.gen || !sysState.running) return;
 
       var chunks = (res && res.chunks) || [];
       var newSegs = [];
       for (var k = 0; k < chunks.length; k++) {
         var c = chunks[k];
         var ts = c.timestamp || [0, 0];
-        var s0 = Number(ts[0]);
-        var s1 = Number(ts[1]);
+        var s0 = Number(ts[0]), s1 = Number(ts[1]);
         if (!isFinite(s0)) s0 = 0;
         if (!isFinite(s1) || s1 <= s0) s1 = s0 + 0.4;
         var absStart = windowStartSec + s0;
         var absEnd = windowStartSec + s1;
-        // Only new content
         if (absEnd <= sysState.transcribedUntil + 0.15) continue;
         if (absStart < sysState.transcribedUntil - 1.5) absStart = sysState.transcribedUntil;
         var txt = String(c.text || '').trim();
@@ -1314,8 +1327,8 @@
         if (absEnd > sysState.transcribedUntil) sysState.transcribedUntil = absEnd;
       }
       if (newSegs.length) {
-        // Combine adjacent short fragments
-        var combinedText = newSegs.map(function (s) { return s.text; }).join(' ').replace(/\s+/g, ' ').trim();
+        var combinedText = newSegs.map(function (s) { return s.text; }).join(' ')
+          .replace(/\s+/g, ' ').trim();
         var firstStart = newSegs[0].start;
         var lastEnd = newSegs[newSegs.length - 1].end;
         sysAppendSegment(combinedText, firstStart, lastEnd);
@@ -1326,8 +1339,7 @@
   }
 
   async function sysStop() {
-    if (!sysState.running) return;
-    sysState.running = false;
+    sysState.gen++;               // invalidate any in-flight start/tick
     if (sysState.intervalId) { clearInterval(sysState.intervalId); sysState.intervalId = null; }
     try { if (sysState.processor) sysState.processor.disconnect(); } catch (e) {}
     try { if (sysState.source) sysState.source.disconnect(); } catch (e) {}
@@ -1337,16 +1349,19 @@
       if (sysState.stream) sysState.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
     } catch (e) {}
     try { sysEl.video.srcObject = null; } catch (e) {}
-    sysEl.video.hidden = true;
-    sysEl.placeholder.style.display = '';
+
+    sysState.running = false;
+    sysState.stream = null;
     sysState.audioCtx = null;
     sysState.processor = null;
     sysState.source = null;
     sysState.gainNode = null;
-    sysState.stream = null;
     sysState.buffer = new Float32Array(0);
     sysState.absSampleOffset = 0;
     sysState.totalSamples = 0;
+
+    sysEl.video.hidden = true;
+    sysEl.placeholder.style.display = '';
     sysEl.start.disabled = false;
     sysEl.stop.disabled = true;
     sysEl.stage.classList.remove('listening');
@@ -1394,7 +1409,6 @@
   });
   sysEl.assBtn.addEventListener('click', function () {
     if (!sysState.segments.length) return;
-    // Convert segments to word list (approximate split)
     var words = [];
     sysState.segments.forEach(function (s) {
       var parts = s.text.split(/\s+/).filter(Boolean);
@@ -1409,7 +1423,7 @@
   });
 
   // ============================================================
-  // ============ MODE 3: FILE → WHISPER ============
+  // MODE 3: FILE → WHISPER
   // ============================================================
   var fileWhisper = createWhisperClient();
   var fileEl = {
@@ -1678,7 +1692,6 @@
   });
   window.addEventListener('resize', updateKaraokeFont);
 
-  // Rebuild blocks when ASS options change
   ['assWpc', 'assFont', 'assFs', 'assBord', 'assMarginV', 'assMarginLR', 'assPlayres',
    'assPopIn', 'assPopOut', 'assPopExtra', 'assPopBlur', 'assTailHold',
    'assActive', 'assInactive', 'assOutline', 'assUppercase'].forEach(function (id) {
@@ -1747,6 +1760,108 @@
 
 })();
 </script>
+
+<script>
+// Disable right-click
+document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+function ctrlShiftKey(e, keyCode) {
+  return e.ctrlKey && e.shiftKey && e.keyCode === keyCode.charCodeAt(0);
+}
+
+document.onkeydown = (e) => {
+  // Disable F12, Ctrl + Shift + I, Ctrl + Shift + J, Ctrl + U
+  if (
+    event.keyCode === 123 ||
+    ctrlShiftKey(e, 'I') ||
+    ctrlShiftKey(e, 'J') ||
+    ctrlShiftKey(e, 'C') ||
+    (e.ctrlKey && e.keyCode === 'U'.charCodeAt(0))
+  )
+    return false;
+};
+</script>
+<script>
+ if (typeof document.onselectstart!="undefined" ) {
+  document.onselectstart=new Function ("return false" );
+ }
+ else {
+  document.onmousedown=new Function ("return false" );
+  document.onmouseup=new Function ("return true" );
+ }
+</script>
+<script>
+   document.onkeydown = function(e) {
+if(event.keyCode == 123) {
+    return false;
+}
+if(e.ctrlKey && e.shiftKey && e.keyCode == 'I'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.shiftKey && e.keyCode == 'J'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'U'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'C'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'X'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'Y'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'Z'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'V'.charCodeAt(0)){
+    return false;
+}
+if (e.keyCode == 67 && e.shiftKey && (e.ctrlKey || e.metaKey)){
+    return false;
+}
+if (e.keyCode == 'J'.charCodeAt(0) && e.altKey && (e.ctrlKey || e.metaKey)){
+    return false;
+}
+if (e.keyCode == 'I'.charCodeAt(0) && e.altKey && (e.ctrlKey || e.metaKey)){
+    return false;
+}
+if ((e.keyCode == 'V'.charCodeAt(0) && e.metaKey) || (e.metaKey && e.altKey)){
+    return false;
+}
+if (e.ctrlKey && e.shiftKey && e.keyCode == 'C'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'S'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'H'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'A'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'F'.charCodeAt(0)){
+    return false;
+}
+if(e.ctrlKey && e.keyCode == 'E'.charCodeAt(0)){
+    return false;
+}
+}
+if (document.addEventListener) {
+    document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    }, false);
+}else{
+    document.attachEvent('oncontextmenu', function() {
+    window.event.returnValue = false;
+    });
+}
+</script>
+
+      
 
 </body>
 </html>
