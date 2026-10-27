@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#0d1117" />
-<title>Auto Captions · Live + Whisper · SRT/VTT/ASS (No API)</title>
-<meta name="description" content="Live mic captions + in-browser Whisper for video/audio → SRT/VTT/ASS. No server, no API key." />
+<title>Auto Captions · Live + Whisper · SRT/VTT/ASS (No API Key)</title>
+<meta name="description" content="Browser-only live captions with system/tab audio capture, in-browser Whisper for video/audio files, auto language detection, caption translation, and SRT/VTT/ASS export. No API key required." />
 
 <link rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
@@ -64,7 +64,6 @@
 
   .wrap{max-width:1080px;margin:0 auto;padding:12px 20px 70px}
 
-  /* tabs */
   .tabs{
     display:flex;gap:6px;margin-bottom:18px;
     border-bottom:1px solid var(--border);padding-bottom:0;
@@ -87,7 +86,6 @@
   .card h2{margin:0 0 4px;font-size:13.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;}
   .card .desc{margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.55}
 
-  /* stage */
   .stage{
     position:relative;width:100%;aspect-ratio:16/9;
     background:#05070a;border:1px solid var(--border);border-radius:12px;
@@ -136,6 +134,21 @@
   .fs-btn:hover{background:rgba(48,54,61,.95);border-color:#8b949e}
   .fs-btn i{font-size:15px}
 
+  .resume-audio{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    z-index:20;padding:14px 24px;
+    background:linear-gradient(180deg,#2f81f7,#1f6feb);color:#fff;
+    border:0;border-radius:12px;font-weight:700;font-size:14px;
+    cursor:pointer;box-shadow:0 10px 30px rgba(47,129,247,.5);
+    font-family:inherit;display:inline-flex;align-items:center;gap:10px;
+    animation:pulse-scale 2s infinite;
+  }
+  .resume-audio[hidden]{display:none}
+  @keyframes pulse-scale{
+    0%,100%{transform:translate(-50%,-50%) scale(1)}
+    50%{transform:translate(-50%,-50%) scale(1.05)}
+  }
+
   .subs{
     position:absolute;left:0;right:0;bottom:0;
     padding:80px 24px 26px;
@@ -150,11 +163,11 @@
     text-shadow:0 2px 12px rgba(0,0,0,.98), 0 0 4px rgba(0,0,0,.9);
     word-break:break-word;transition:opacity .15s;
   }
+  .sub-line[hidden]{display:none}
   .sub-line.interim{font-weight:500;font-style:italic;color:#c9d1d9;text-shadow:0 2px 8px rgba(0,0,0,.9);min-height:1px;}
   .sub-line.placeholder{font-weight:500;font-style:normal;color:#6e7681;font-size:clamp(14px,2.1vw,18px);text-shadow:none;}
   .sub-line.trans{font-size:clamp(14px,2.4vw,22px);font-weight:600;color:#79c0ff;text-shadow:0 2px 10px rgba(0,0,0,.95);}
 
-  /* rows */
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
   .row + .row{margin-top:14px}
   .field{display:flex;flex-direction:column;gap:6px}
@@ -173,8 +186,8 @@
   }
   input[type="color"]{padding:3px;width:50px;height:38px;cursor:pointer;min-width:50px;}
   input[type="number"]{min-width:80px;max-width:120px}
+  input[type="checkbox"]{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;min-width:auto;}
 
-  /* buttons */
   .btn{
     appearance:none;border:1px solid var(--border);background:#21262d;color:var(--text);
     padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:650;cursor:pointer;
@@ -193,7 +206,6 @@
   .btn.live{border-color:rgba(63,185,80,.55);color:#7ee787;background:rgba(63,185,80,.1)}
   .btn.live:hover:not(:disabled){background:rgba(63,185,80,.18);border-color:var(--green)}
 
-  /* status */
   .status{
     display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;
     font-size:12.5px;font-weight:650;background:#0d1117;border:1px solid var(--border);
@@ -206,7 +218,6 @@
   .status.error .dot{color:var(--red)}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.55)}70%{box-shadow:0 0 0 9px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
 
-  /* chip */
   .chip{
     display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;
     font-size:12.5px;font-weight:650;background:rgba(47,129,247,.12);border:1px solid rgba(47,129,247,.45);
@@ -216,7 +227,6 @@
   .chip[hidden]{display:none}
   .chip.busy{background:rgba(210,153,34,.14);border-color:rgba(210,153,34,.5);color:#ffd8a8}
 
-  /* meter */
   .meter-wrap{display:flex;align-items:center;gap:12px;margin-top:14px}
   .meter-wrap[hidden]{display:none}
   .meter{flex:1 1 auto;height:12px;border-radius:999px;overflow:hidden;background:#0b0f14;border:1px solid var(--border);position:relative}
@@ -224,7 +234,6 @@
   .meter-label{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--muted);min-width:64px;text-align:right}
   .meter-wrap .src-tag{flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#7ee787;display:inline-flex;align-items:center;gap:5px}
 
-  /* transcript */
   .transcript{
     margin-top:14px;max-height:320px;overflow-y:auto;
     border:1px solid var(--border);border-radius:12px;background:#0b0f14;padding:8px;
@@ -235,6 +244,8 @@
   .seg:nth-child(odd){background:rgba(255,255,255,.022)}
   .seg-time{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--accent);padding-top:3px;white-space:nowrap;letter-spacing:-.2px}
   .seg-text{flex:1 1 auto;word-break:break-word;display:flex;flex-direction:column;gap:2px}
+  .seg-tr{color:#79c0ff;font-size:13px;opacity:.95}
+  .seg-tr[hidden]{display:none}
   .empty{color:#565f6b;font-size:13.5px;padding:22px 12px;text-align:center}
 
   .meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
@@ -257,13 +268,11 @@
   .warnbox i{margin-right:6px}
   .warnbox code{background:rgba(0,0,0,.35);border-radius:4px;padding:1px 5px}
 
-  /* vol slider */
   .vol-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   input[type="range"]{-webkit-appearance:none;appearance:none;height:6px;border-radius:999px;background:#21262d;outline:none;width:130px;cursor:pointer}
   input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #0d1117;cursor:pointer}
   input[type="range"]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #0d1117;cursor:pointer}
 
-  /* drop zone */
   .drop-zone{
     border:2px dashed var(--border);border-radius:12px;padding:40px 20px;
     text-align:center;cursor:pointer;transition:border-color .15s,background .15s;
@@ -273,7 +282,6 @@
   .drop-zone i{font-size:32px;margin-bottom:10px;display:block}
   .drop-zone p{margin:0;font-size:13.5px}
 
-  /* progress */
   .progress-track{
     height:8px;background:#0b0f14;border:1px solid var(--border);border-radius:999px;
     overflow:hidden;margin-top:14px;
@@ -283,7 +291,6 @@
     transition:width .2s ease;
   }
 
-  /* karaoke overlay */
   .stage.karaoke{aspect-ratio:16/9}
   .stage.karaoke video{width:100%;height:100%;object-fit:contain;background:#000}
   .karaoke-layer{
@@ -315,7 +322,6 @@
     100%{-webkit-text-stroke:5px #000;filter:none;transform:scale(1)}
   }
 
-  /* ass opts collapse */
   details.assopts summary{
     cursor:pointer;font-size:13px;color:#79c0ff;padding:6px 0;user-select:none;
   }
@@ -329,7 +335,6 @@
     select, input[type="file"]{min-width:150px}
     .subs{padding:60px 14px 18px}
     .tab{padding:10px 12px;font-size:13px}
-    .karaoke-line{font-size:14px !important}
   }
 </style>
 </head>
@@ -403,7 +408,6 @@
     <b>virtual cable</b>.
   </div>
 
-  <!-- TABS -->
   <div class="tabs" id="tabs">
     <button class="tab active" data-tab="live"><i class="fa-solid fa-microphone"></i> Live mic / system audio</button>
     <button class="tab" data-tab="file"><i class="fa-solid fa-film"></i> File → Whisper captions</button>
@@ -425,8 +429,7 @@
         <button class="fs-btn" id="fsBtn" type="button" title="Fullscreen" aria-label="Toggle fullscreen">
           <i id="fsIcon" class="fa-solid fa-expand"></i>
         </button>
-        <button class="resume-audio" id="resumeAudioBtn" type="button" hidden
-                style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20;padding:14px 24px;background:linear-gradient(180deg,#2f81f7,#1f6feb);color:#fff;border:0;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 10px 30px rgba(47,129,247,.5);font-family:inherit;display:inline-flex;align-items:center;gap:10px;">
+        <button class="resume-audio" id="resumeAudioBtn" type="button" hidden>
           <i class="fa-solid fa-volume-high"></i><span>Click to enable audio playback</span>
         </button>
         <div class="subs" id="subs">
@@ -763,7 +766,7 @@
           <label class="field"><span>Blur</span><input type="number" id="assPopBlur" step="0.1" value="0.8" /></label>
           <label class="field"><span>Tail hold s</span><input type="number" id="assTailHold" step="0.1" value="0" /></label>
           <label class="field" style="flex-direction:row;align-items:center;gap:8px">
-            <input type="checkbox" id="assUppercase" checked style="min-width:auto;width:16px;height:16px" />
+            <input type="checkbox" id="assUppercase" checked />
             <span style="text-transform:none;font-size:13px;color:var(--text)">Uppercase</span>
           </label>
         </div>
@@ -867,9 +870,7 @@
   }
 
   /* ============================================================
-     ============================================================
      LIVE MODE
-     ============================================================
      ============================================================ */
   var el = {
     source: $('source'), shareField: $('shareField'), shareBtn: $('shareBtn'),
@@ -1330,24 +1331,49 @@
     } catch (err) { setStatus('error','Cannot route to that device'); }
   }
 
+  /* ------------------------------------------------------------------
+     requestSystemMedia: rich constraints → simple, retry on
+     TypeError AND NotSupportedError; abort only on real user cancel.
+     ------------------------------------------------------------------ */
   async function requestSystemMedia() {
-    if (!window.isSecureContext) { var e0 = new Error('Insecure context'); e0.name = 'SecurityError'; throw e0; }
-    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-      var e1 = new Error('getDisplayMedia unavailable'); e1.name = 'NotSupportedError'; throw e1;
+    if (!window.isSecureContext) {
+      var e0 = new Error('Insecure context'); e0.name = 'SecurityError'; throw e0;
     }
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+      var e1 = new Error('getDisplayMedia unavailable');
+      e1.name = 'NotSupportedError';
+      e1._noApi = true;
+      throw e1;
+    }
+
     var attempts = [
-      { video:true, audio:true, selfBrowserSurface:'exclude', surfaceSwitching:'include', systemAudio:'include' },
-      { video:true, audio:true, systemAudio:'include' },
-      { video:true, audio:true }
+      { video: true, audio: true,
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching:  'include',
+        systemAudio:       'include' },
+      { video: true, audio: true, systemAudio: 'include' },
+      { video: true, audio: true },
+      { video: true, audio: false }
     ];
+
     var lastErr = null;
-    for (var i=0;i<attempts.length;i++) {
-      try { return await navigator.mediaDevices.getDisplayMedia(attempts[i]); }
-      catch (err) {
+    for (var i = 0; i < attempts.length; i++) {
+      try {
+        return await navigator.mediaDevices.getDisplayMedia(attempts[i]);
+      } catch (err) {
         lastErr = err;
-        if (!err || err.name !== 'TypeError') throw err;
+        var name = err && err.name;
+        if (name === 'NotAllowedError'   ||
+            name === 'PermissionDeniedError' ||
+            name === 'AbortError'        ||
+            name === 'SecurityError') {
+          throw err;
+        }
+        console.warn('[getDisplayMedia] attempt ' + i +
+                     ' failed (' + name + '), retrying with simpler constraints…');
       }
     }
+    if (lastErr) lastErr._noApi = true;
     throw lastErr;
   }
 
@@ -1370,23 +1396,47 @@
       try { if (actx) actx.close(); } catch (x) {}
       var name = (err && err.name) || 'Error';
       var msg = (err && err.message) || '';
+      console.warn('[capture] failed:', name, msg);
+
       if (name === 'SecurityError') {
         el.secureWarn.classList.add('show');
         setStatus('error', 'Needs HTTPS or http://localhost — file:// won\'t work');
-      } else if (name === 'NotAllowedError' || name === 'AbortError' || name === 'PermissionDeniedError') {
-        setStatus('idle', 'Share cancelled');
-      } else if (name === 'NotSupportedError') {
-        el.sysWarn.classList.add('show');
-        setStatus('error', 'System audio capture unsupported — use Chrome or Edge');
-      } else if (name === 'NotFoundError') {
-        setStatus('error', 'No screen/tab available to share');
-      } else if (name === 'InvalidStateError') {
-        setStatus('error', 'Capture already in progress elsewhere');
-      } else if (name === 'TypeError') {
-        setStatus('error', 'Capture rejected the constraints — try Chrome or Edge');
-      } else {
-        setStatus('error', 'Capture failed: ' + name + (msg ? ' — ' + msg.slice(0, 60) : ''));
+        return false;
       }
+      if (name === 'NotAllowedError' || name === 'AbortError' || name === 'PermissionDeniedError') {
+        setStatus('idle', 'Share cancelled');
+        return false;
+      }
+      if (name === 'NotFoundError') {
+        setStatus('error', 'No screen/tab available to share');
+        return false;
+      }
+      if (name === 'InvalidStateError') {
+        setStatus('error', 'Capture already in progress elsewhere');
+        return false;
+      }
+      if (name === 'NotSupportedError' || name === 'TypeError' || (err && err._noApi)) {
+        var ok = false;
+        try {
+          ok = window.confirm(
+            '⚠️  System audio capture isn\'t available in this browser.\n\n' +
+            'Fall back to the microphone?\n\n' +
+            'If you set up a virtual audio cable (VB-CABLE / BlackHole / ' +
+            'pactl null-sink) as your default mic, system audio will still ' +
+            'flow through it — the recogniser can\'t tell the difference.'
+          );
+        } catch (e) { ok = true; }
+        if (ok) {
+          el.source.value = 'mic';
+          updateSourceUI();
+          setStatus('', 'Using microphone as fallback');
+          setTimeout(function () { beginRecognition(); }, 120);
+          return true;
+        }
+        setStatus('idle', 'Cancelled');
+        return false;
+      }
+      setStatus('error', 'Capture failed: ' + name + (msg ? ' — ' + msg.slice(0, 60) : ''));
       return false;
     }
 
@@ -1720,9 +1770,7 @@
 
 
   /* ============================================================
-     ============================================================
      FILE MODE (in-browser Whisper via @xenova/transformers)
-     ============================================================
      ============================================================ */
   var fileEl = {
     panel: $('filePanel'),
@@ -1752,7 +1800,6 @@
     vttBtn: $('vttBtnFile'),
     txtBtn: $('txtBtnFile'),
     jsonBtn: $('jsonBtnFile'),
-    /* ASS options */
     wpc: $('assWpc'), font: $('assFont'), fs: $('assFs'),
     active: $('assActive'), inactive: $('assInactive'), outline: $('assOutline'),
     bord: $('assBord'), marginV: $('assMarginV'), marginLR: $('assMarginLR'),
@@ -1793,7 +1840,6 @@
     return bytes.toFixed(bytes >= 100 || i === 0 ? 0 : 1) + ' ' + units[i];
   }
 
-  /* ------------ Whisper worker ------------ */
   function createTranscriberWorker() {
     var code = [
       "import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';",
@@ -1856,8 +1902,6 @@
             setFileProgress(p.progress);
           } else if (p && p.status === 'initiate' && p.file) {
             setFileStatus('', 'Preparing ' + p.file.split('/').pop() + '…');
-          } else if (p && p.status === 'done') {
-            /* individual file done */
           }
         } else if (t === 'result') {
           worker.removeEventListener('message', handler);
@@ -1868,12 +1912,10 @@
         }
       }
       worker.addEventListener('message', handler);
-      /* Send a copy — don't transfer, so we can retry if the worker crashes */
       worker.postMessage({ id: id, type: 'transcribe', audio: audioFloat32, model: model, language: language });
     });
   }
 
-  /* ------------ Audio decoding to 16 kHz mono Float32Array ------------ */
   async function decodeTo16kMono(blob) {
     var arrayBuf = await blob.arrayBuffer();
     var AC = window.AudioContext || window.webkitAudioContext;
@@ -1893,7 +1935,6 @@
     return rendered.getChannelData(0);
   }
 
-  /* ------------ Whisper result normalisation ------------ */
   function normalizeWhisperResult(result) {
     var chunks = (result && result.chunks) || [];
     var words = [];
@@ -1908,7 +1949,6 @@
       if (!isFinite(e) || e <= s) e = s + 0.3;
       words.push({ word: w, start: s, end: e });
     }
-    /* Sanitise overlaps */
     for (var j=0;j<words.length;j++) {
       if (words[j].end <= words[j].start) words[j].end = words[j].start + 0.3;
       if (j > 0 && words[j].start < words[j-1].end) words[j].start = words[j-1].end;
@@ -1916,7 +1956,6 @@
     return words;
   }
 
-  /* ------------ Grouping ------------ */
   function buildBlocks(words, wpc) {
     var blocks = [];
     for (var i=0;i<words.length;i+=wpc) {
@@ -1957,9 +1996,9 @@
     return segs;
   }
 
-  /* ============================================================
+  /* --------------------------------------------------------------
      ASS generator — direct JS port of the Python build_ass
-     ============================================================ */
+     -------------------------------------------------------------- */
   function toAssTime(t) {
     var cs = Math.round(t * 100);
     var h = Math.floor(cs / 360000);
@@ -2077,9 +2116,7 @@
     };
   }
 
-  /* ============================================================
-     FILE MODE — karaoke preview
-     ============================================================ */
+  /* Karaoke preview */
   function updateKaraokeFont() {
     var w = fileEl.stage.clientWidth || 640;
     var h = fileEl.stage.clientHeight || 360;
@@ -2091,7 +2128,6 @@
   function renderKaraokeAt(t) {
     if (!fileState.blocks.length) { fileEl.karaoke.innerHTML = ''; return; }
     var blocks = fileState.blocks;
-    /* Find containing block */
     var blockIdx = -1;
     for (var i=0;i<blocks.length;i++) {
       var b = blocks[i];
@@ -2140,9 +2176,6 @@
     tick();
   }
 
-  /* ============================================================
-     FILE MODE — transcript rendering
-     ============================================================ */
   function renderFileTranscript() {
     fileEl.transcript.innerHTML = '';
     if (!fileState.segments.length) {
@@ -2164,9 +2197,6 @@
     }
   }
 
-  /* ============================================================
-     FILE MODE — export builders
-     ============================================================ */
   function buildFileSRT() {
     return '\uFEFF' + fileState.segments.map(function (s, i) {
       var a = srtTime(Math.max(0, s.start));
@@ -2191,9 +2221,6 @@
     return JSON.stringify(fileState.words, null, 2);
   }
 
-  /* ============================================================
-     FILE MODE — main flow
-     ============================================================ */
   function handleFileSelected(file) {
     if (!file) return;
     if (!/^(video|audio)\//.test(file.type)) {
@@ -2213,7 +2240,6 @@
     fileEl.name.textContent = file.name;
     fileEl.meta.textContent = ' · ' + humanSize(file.size) + ' · ' + (file.type || '?');
 
-    /* Load into preview player */
     fileEl.player.src = fileState.fileURL;
     fileEl.player.load();
 
@@ -2286,7 +2312,7 @@
     }
   }
 
-  /* Wire up file mode events */
+  /* File mode events */
   fileEl.drop.addEventListener('click', function () { fileEl.input.click(); });
   fileEl.input.addEventListener('change', function (e) { handleFileSelected(e.target.files && e.target.files[0]); });
   ['dragenter','dragover'].forEach(function (n) {
@@ -2305,7 +2331,6 @@
     setFileStatus('idle', 'Cancelling…');
   });
 
-  /* Karaoke options live update */
   var karaokeOptsChanged = function () {
     if (!fileState.words.length) return;
     var opts = readAssOptions();
@@ -2320,18 +2345,15 @@
   [fileEl.active, fileEl.inactive, fileEl.outline, fileEl.uppercase].forEach(function (inp) {
     inp.addEventListener('input', karaokeOptsChanged);
   });
-  /* Preview active color should follow the ASS "Active" picker */
   fileEl.active.addEventListener('input', function () {
     document.documentElement.style.setProperty('--pop', fileEl.active.value || '#FFB117');
   });
   document.documentElement.style.setProperty('--pop', fileEl.active.value || '#FFB117');
 
-  /* Video metadata → set stage aspect ratio */
   fileEl.player.addEventListener('loadedmetadata', function () {
     var v = fileEl.player;
     if (v.videoWidth && v.videoHeight) {
       fileEl.stage.style.aspectRatio = v.videoWidth + ' / ' + v.videoHeight;
-      /* Update default PlayRes to video dimensions */
       if (!fileEl.playres.value || fileEl.playres.value === '1080x1920') {
         fileEl.playres.value = v.videoWidth + 'x' + v.videoHeight;
       }
@@ -2340,7 +2362,6 @@
   });
   window.addEventListener('resize', updateKaraokeFont);
 
-  /* Export buttons */
   fileEl.assBtn.addEventListener('click', function () {
     if (!fileState.words.length) return;
     var opts = readAssOptions();
@@ -2363,7 +2384,6 @@
     downloadBlob('words_' + fileStamp() + '.json', buildFileJSON(), 'application/json');
   });
 
-  /* Clean up on unload */
   window.addEventListener('beforeunload', function () {
     liveState.active = false;
     liveState.gen++;
