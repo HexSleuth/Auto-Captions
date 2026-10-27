@@ -1110,45 +1110,86 @@
     }
   });
 
+  // ─── FIXED: robust getDisplayMedia detection ─────────────────────────
+  // We now (a) wait a tick for lazy-init, (b) try legacy fallbacks,
+  // (c) surface real diagnostics instead of a misleading "no getDisplayMedia".
   async function sysRequestStream() {
-    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
-      var e = new Error('Screen/tab capture not supported');
-      e.name = 'NotSupportedError';
-      e.isMissing = true;
-      throw e;
+    // Give the browser a chance to initialise navigator.mediaDevices
+    await new Promise(function (r) { setTimeout(r, 0); });
+
+    function diag() {
+      return 'protocol=' + window.location.protocol +
+        ' · secureContext=' + window.isSecureContext +
+        ' · hasMediaDevices=' + !!navigator.mediaDevices +
+        ' · hasGetDisplayMedia=' +
+        !!(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
     }
-    // Try from most specific to most permissive. Keep constraints simple —
-    // overconstrained audio can throw NotSupportedError on some Chrome builds.
+
+    var md;
+    try { md = navigator.mediaDevices; } catch (e) { md = null; }
+
+    if (!md) {
+      var e1 = new Error('navigator.mediaDevices is unavailable');
+      e1.name = 'NotSupportedError';
+      e1.isMissing = true;
+      e1.details = diag() +
+        '. This usually means the page is not in a secure context ' +
+        '(must be HTTPS or localhost), or a browser extension is blocking media APIs.';
+      throw e1;
+    }
+
+    var getDM;
+    try { getDM = md.getDisplayMedia; } catch (e) { getDM = null; }
+
+    if (typeof getDM !== 'function') {
+      // Legacy fallback (very old Chrome / Edge)
+      if (typeof navigator.getDisplayMedia === 'function') {
+        getDM = navigator.getDisplayMedia.bind(navigator);
+      } else if (typeof navigator.webkitGetDisplayMedia === 'function') {
+        getDM = navigator.webkitGetDisplayMedia.bind(navigator);
+      } else {
+        var e2 = new Error('getDisplayMedia is not a function');
+        e2.name = 'NotSupportedError';
+        e2.isMissing = true;
+        e2.details = diag() +
+          '. mediaDevices exists but getDisplayMedia is missing. ' +
+          'The browser may not support screen/tab capture.';
+        throw e2;
+      }
+    }
+
+    // Standard constraints first; systemAudio is a hint only.
     var attempts = [
-      { video: true, audio: true, systemAudio: 'include' },
       { video: true, audio: true },
-      { video: { frameRate: 30 }, audio: true }
+      { video: true, audio: true, systemAudio: 'include' }
     ];
+
     var lastErr = null;
     for (var i = 0; i < attempts.length; i++) {
       try {
-        return await navigator.mediaDevices.getDisplayMedia(attempts[i]);
+        return await getDM.call(md, attempts[i]);
       } catch (err) {
         lastErr = err;
         var n = err && err.name;
-        if (n === 'NotAllowedError' || n === 'AbortError' || n === 'PermissionDeniedError' ||
-            n === 'SecurityError' || n === 'InvalidStateError') {
+        // Terminal errors — no point retrying with different constraints
+        if (n === 'NotAllowedError' || n === 'AbortError' ||
+            n === 'PermissionDeniedError' || n === 'SecurityError' ||
+            n === 'InvalidStateError') {
           throw err;
         }
-        // Other errors (incl. NotSupportedError from a bad constraint combo) → try next
+        // NotSupportedError / TypeError → try the next constraint set
       }
     }
     throw lastErr || new Error('getDisplayMedia failed');
   }
+  // ────────────────────────────────────────────────────────────────────
 
   async function sysStart() {
     if (sysState.running || sysState.capturing) return;
     sysState.fatal = null;
     sysSetProgress(0);
 
-    // ── 1) Request stream FIRST while user activation is fresh ──
-    // (loading the model can take 30+ s; if we wait, user activation expires
-    //  and getDisplayMedia throws InvalidStateError / NotSupportedError.)
+    // 1) Request stream FIRST while user activation is fresh
     sysSetStatus('busy', 'Requesting audio share…');
     var stream;
     try {
@@ -1162,7 +1203,10 @@
       }
       if (name === 'NotSupportedError') {
         if (err.isMissing) {
-          sysSetStatus('error', 'Browser has no getDisplayMedia — use Chrome / Edge on HTTPS');
+          var d = err.details || err.message || 'Capture unavailable';
+          if (d.length > 110) d = d.slice(0, 107) + '…';
+          sysSetStatus('error', d);
+          console.error('[sys-capture]', err.details || err.message);
         } else {
           sysSetStatus('error', 'Capture failed — pick a tab and tick "Share tab audio"');
         }
@@ -1190,7 +1234,7 @@
     sysEl.video.muted = true;
     sysEl.video.play().catch(function () {});
 
-    // ── 2) Set up PCM capture ──
+    // 2) Set up PCM capture
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       var ctx = new AC();
@@ -1246,14 +1290,14 @@
     var vt = stream.getVideoTracks()[0];
     if (vt) vt.addEventListener('ended', function () { sysStop(); });
 
-    // ── 3) Start tick loop immediately so audio buffers while model loads ──
+    // 3) Start tick loop immediately so audio buffers while model loads
     sysState.running = true;
     sysEl.start.disabled = true;
     sysEl.stop.disabled = false;
     sysEl.stage.classList.add('listening');
     sysState.intervalId = setInterval(sysTick, sysState.strideSec * 1000);
 
-    // ── 4) Load model (progress shown) ──
+    // 4) Load model (progress shown)
     var chosenModel = sysEl.model.value;
     sysState.modelReady = false;
     sysState.modelLoading = true;
@@ -1262,17 +1306,13 @@
 
     try {
       await sysWhisper.load(chosenModel);
-      if (!sysState.capturing) {
-        // user cancelled while model was loading
-        return;
-      }
+      if (!sysState.capturing) return; // user cancelled during load
       sysState.modelReady = true;
       sysState.modelLoading = false;
       sysState.modelName = chosenModel;
       sysSetProgress(100);
       setTimeout(function () { sysSetProgress(0); }, 700);
       sysSetStatus('listening', 'Capturing · transcribing every ' + sysState.strideSec + 's');
-      // kick off first transcription right away
       sysTick();
     } catch (e) {
       sysState.modelLoading = false;
@@ -1411,7 +1451,6 @@
     sysRefreshUI();
   });
   sysEl.model.addEventListener('change', function () {
-    // Reset only if not currently capturing
     if (!sysState.capturing) {
       sysState.modelReady = false;
       sysState.modelName = null;
@@ -1675,7 +1714,6 @@
       }
       if (fileState.cancelRequested) throw new Error('Cancelled');
 
-      // Ensure model is loaded first
       await fileWhisper.load(fileEl.model.value);
       if (fileState.cancelRequested) throw new Error('Cancelled');
 
