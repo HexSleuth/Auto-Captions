@@ -251,6 +251,8 @@
 
   <!-- ============ SYSTEM TAB ============ -->
   <section id="systemPanel" hidden>
+    <div id="sysCapWarn" class="warnbox"></div>
+
     <div class="card">
       <h2>System / Tab audio → Whisper (In-browser)</h2>
       <p class="desc">
@@ -259,6 +261,13 @@
         First run downloads the model (~40 MB for tiny.en), then it's cached.
       </p>
       <div class="row">
+        <label class="field">
+          <span>Audio source</span>
+          <select id="sysSource">
+            <option value="display" selected>Tab / System audio</option>
+            <option value="mic">Microphone</option>
+          </select>
+        </label>
         <button id="sysStart" class="btn primary" type="button">
           <i class="fa-solid fa-circle-dot"></i><span>Capture &amp; transcribe</span>
         </button>
@@ -307,6 +316,8 @@
         <strong>How it works:</strong> <code>getDisplayMedia({audio:true})</code> → 16 kHz PCM via
         <code>ScriptProcessorNode</code> → sliding 9 s window → Whisper worker every ~3 s →
         only newly appearing content is emitted. No monitor playback, so no echo loop.
+        If your browser lacks <code>getDisplayMedia</code> (mobile, some Firefox builds),
+        pick <b>Microphone</b> instead — same Whisper pipeline, just a different audio source.
       </p>
     </div>
 
@@ -317,7 +328,7 @@
         <div class="stage-placeholder" id="sysPlaceholder">
           <div class="icon"><i class="fa-solid fa-volume-high"></i></div>
           <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
-          <span>Click “Capture &amp; transcribe” — pick a tab and tick “Share tab audio”.</span>
+          <span id="sysPlaceholderText">Click “Capture &amp; transcribe” — pick a tab and tick “Share tab audio”.</span>
         </div>
         <div class="subs">
           <span class="sub-line placeholder" id="sysFinal">Waiting for audio…</span>
@@ -640,7 +651,7 @@
   }
 
   // ============================================================
-  // WHISPER WORKER CLIENT (with proper load + transcribe)
+  // WHISPER WORKER CLIENT
   // ============================================================
   function createWhisperClient() {
     var worker = null;
@@ -760,7 +771,6 @@
     };
   }
 
-  // Resample Float32Array from arbitrary rate to 16 kHz
   async function resampleTo16k(data, fromRate) {
     if (fromRate === 16000) return data;
     var OAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -999,19 +1009,22 @@
   });
 
   // ============================================================
-  // ============ MODE 2: SYSTEM AUDIO (Whisper) ============
+  // ============ MODE 2: SYSTEM / MIC → WHISPER ============
   // ============================================================
   var sysEl = {
+    source: $('sysSource'),
     start: $('sysStart'), stop: $('sysStop'), clear: $('sysClear'),
     model: $('sysModel'), lang: $('sysLang'),
     status: $('sysStatus'), statusText: $('sysStatusText'),
     progress: $('sysProgress'), progressFill: $('sysProgressFill'),
     stage: $('sysStage'), video: $('sysVideo'), placeholder: $('sysPlaceholder'),
+    placeholderText: $('sysPlaceholderText'),
     final: $('sysFinal'),
     transcript: $('sysTranscript'), empty: $('sysEmpty'), cues: $('sysCues'),
     cueCount: $('sysCueCount'), wordCount: $('sysWordCount'),
     assBtn: $('sysAssBtn'), srtBtn: $('sysSrtBtn'), vttBtn: $('sysVttBtn'),
-    txtBtn: $('sysTxtBtn'), jsonBtn: $('sysJsonBtn')
+    txtBtn: $('sysTxtBtn'), jsonBtn: $('sysJsonBtn'),
+    capWarn: $('sysCapWarn')
   };
 
   var sysWhisper = createWhisperClient();
@@ -1019,6 +1032,7 @@
   var sysState = {
     running: false,
     capturing: false,
+    sourceMode: 'display',       // 'display' | 'mic'
     stream: null,
     audioCtx: null,
     processor: null,
@@ -1110,31 +1124,110 @@
     }
   });
 
-  // ─── FIXED: robust getDisplayMedia detection ─────────────────────────
-  // We now (a) wait a tick for lazy-init, (b) try legacy fallbacks,
-  // (c) surface real diagnostics instead of a misleading "no getDisplayMedia".
-  async function sysRequestStream() {
-    // Give the browser a chance to initialise navigator.mediaDevices
-    await new Promise(function (r) { setTimeout(r, 0); });
+  // ─── Capability probes ──────────────────────────────────────
+  function hasDisplayCapture() {
+    try {
+      var md = navigator.mediaDevices;
+      if (!md) return false;
+      if (typeof md.getDisplayMedia === 'function') return true;
+      if (typeof navigator.getDisplayMedia === 'function') return true;
+      if (typeof navigator.webkitGetDisplayMedia === 'function') return true;
+      return false;
+    } catch (e) { return false; }
+  }
+  function hasMicCapture() {
+    try {
+      return !!(navigator.mediaDevices &&
+                typeof navigator.mediaDevices.getUserMedia === 'function');
+    } catch (e) { return false; }
+  }
+  function detectMobile() {
+    var ua = navigator.userAgent || '';
+    return /Android|iPhone|iPad|iPod|Mobile|Tablet/i.test(ua);
+  }
 
-    function diag() {
-      return 'protocol=' + window.location.protocol +
-        ' · secureContext=' + window.isSecureContext +
-        ' · hasMediaDevices=' + !!navigator.mediaDevices +
-        ' · hasGetDisplayMedia=' +
-        !!(navigator.mediaDevices && typeof navigator.mediaDevices.getDisplayMedia === 'function');
+  function sysInitCapabilityUI() {
+    var disp = hasDisplayCapture();
+    var mic = hasMicCapture();
+    if (disp) return; // all good, nothing to warn about
+
+    // Disable the display option so users can't pick it and get a confusing error.
+    try {
+      var dispOpt = sysEl.source.querySelector('option[value="display"]');
+      if (dispOpt) {
+        dispOpt.disabled = true;
+        dispOpt.textContent = 'Tab / System audio (unavailable)';
+      }
+    } catch (e) {}
+
+    if (mic) {
+      sysEl.source.value = 'mic';
+      sysState.sourceMode = 'mic';
     }
+
+    var reason;
+    if (detectMobile()) {
+      reason = 'Mobile browsers (Android Chrome, iOS Safari, etc.) don\'t support ' +
+               'screen/tab audio capture. We\'ve switched you to the <b>Microphone</b> ' +
+               'source, which works with the same Whisper pipeline.';
+    } else if (/Firefox/i.test(navigator.userAgent || '')) {
+      reason = 'This Firefox build doesn\'t expose <code>getDisplayMedia</code> ' +
+               '(often missing on Linux without a portal). Use the <b>Microphone</b> source, ' +
+               'or try Chrome / Edge on desktop.';
+    } else {
+      reason = 'Your browser doesn\'t expose <code>getDisplayMedia</code>. ' +
+               'We\'ve switched you to the <b>Microphone</b> source — speak into your mic ' +
+               'and Whisper will transcribe it. For tab/system audio, use Chrome or Edge on desktop.';
+    }
+    sysEl.capWarn.innerHTML = '<i class="fa-solid fa-circle-info"></i><strong>Tab/System capture unavailable.</strong> ' + reason;
+    sysEl.capWarn.classList.add('show');
+
+    if (!mic) {
+      sysEl.start.disabled = true;
+      sysSetStatus('error', 'Neither tab nor mic capture is available');
+      sysEl.source.disabled = true;
+    }
+  }
+
+  // ─── Stream acquisition ─────────────────────────────────────
+  async function sysRequestMic() {
+    var md;
+    try { md = navigator.mediaDevices; } catch (e) { md = null; }
+    if (!md || typeof md.getUserMedia !== 'function') {
+      var e = new Error('getUserMedia unavailable');
+      e.name = 'NotSupportedError';
+      e.isMissing = true;
+      throw e;
+    }
+    try {
+      return await md.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1
+        }
+      });
+    } catch (err) {
+      var n = err && err.name;
+      if (n === 'NotAllowedError' || n === 'PermissionDeniedError') {
+        var e2 = new Error('Microphone permission denied');
+        e2.name = 'NotAllowedError';
+        throw e2;
+      }
+      throw err;
+    }
+  }
+
+  async function sysRequestDisplay() {
+    await new Promise(function (r) { setTimeout(r, 0); });
 
     var md;
     try { md = navigator.mediaDevices; } catch (e) { md = null; }
-
     if (!md) {
       var e1 = new Error('navigator.mediaDevices is unavailable');
       e1.name = 'NotSupportedError';
       e1.isMissing = true;
-      e1.details = diag() +
-        '. This usually means the page is not in a secure context ' +
-        '(must be HTTPS or localhost), or a browser extension is blocking media APIs.';
       throw e1;
     }
 
@@ -1142,28 +1235,22 @@
     try { getDM = md.getDisplayMedia; } catch (e) { getDM = null; }
 
     if (typeof getDM !== 'function') {
-      // Legacy fallback (very old Chrome / Edge)
       if (typeof navigator.getDisplayMedia === 'function') {
         getDM = navigator.getDisplayMedia.bind(navigator);
       } else if (typeof navigator.webkitGetDisplayMedia === 'function') {
         getDM = navigator.webkitGetDisplayMedia.bind(navigator);
       } else {
-        var e2 = new Error('getDisplayMedia is not a function');
+        var e2 = new Error('getDisplayMedia is not available');
         e2.name = 'NotSupportedError';
         e2.isMissing = true;
-        e2.details = diag() +
-          '. mediaDevices exists but getDisplayMedia is missing. ' +
-          'The browser may not support screen/tab capture.';
         throw e2;
       }
     }
 
-    // Standard constraints first; systemAudio is a hint only.
     var attempts = [
       { video: true, audio: true },
       { video: true, audio: true, systemAudio: 'include' }
     ];
-
     var lastErr = null;
     for (var i = 0; i < attempts.length; i++) {
       try {
@@ -1171,45 +1258,52 @@
       } catch (err) {
         lastErr = err;
         var n = err && err.name;
-        // Terminal errors — no point retrying with different constraints
         if (n === 'NotAllowedError' || n === 'AbortError' ||
             n === 'PermissionDeniedError' || n === 'SecurityError' ||
             n === 'InvalidStateError') {
           throw err;
         }
-        // NotSupportedError / TypeError → try the next constraint set
       }
     }
     throw lastErr || new Error('getDisplayMedia failed');
   }
-  // ────────────────────────────────────────────────────────────────────
 
+  async function sysRequestStream(mode) {
+    if (mode === 'mic') return sysRequestMic();
+    return sysRequestDisplay();
+  }
+
+  // ─── Start / stop ───────────────────────────────────────────
   async function sysStart() {
     if (sysState.running || sysState.capturing) return;
     sysState.fatal = null;
     sysSetProgress(0);
 
-    // 1) Request stream FIRST while user activation is fresh
-    sysSetStatus('busy', 'Requesting audio share…');
+    var mode = sysEl.source.value || 'display';
+    if (mode === 'display' && !hasDisplayCapture()) mode = 'mic'; // last-minute fallback
+    if (mode === 'mic' && !hasMicCapture()) {
+      sysSetStatus('error', 'Neither tab nor mic capture is available in this browser');
+      return;
+    }
+    sysState.sourceMode = mode;
+
+    var label = mode === 'mic' ? 'microphone' : 'tab/system audio';
+    sysSetStatus('busy', 'Requesting ' + label + '…');
+
     var stream;
     try {
-      stream = await sysRequestStream();
+      stream = await sysRequestStream(mode);
     } catch (err) {
       var name = (err && err.name) || 'Error';
       var msg = (err && err.message) || '';
       if (name === 'NotAllowedError' || name === 'AbortError' || name === 'PermissionDeniedError') {
-        sysSetStatus('idle', 'Share cancelled');
+        sysSetStatus('idle', mode === 'mic' ? 'Microphone cancelled' : 'Share cancelled');
         return;
       }
       if (name === 'NotSupportedError') {
-        if (err.isMissing) {
-          var d = err.details || err.message || 'Capture unavailable';
-          if (d.length > 110) d = d.slice(0, 107) + '…';
-          sysSetStatus('error', d);
-          console.error('[sys-capture]', err.details || err.message);
-        } else {
-          sysSetStatus('error', 'Capture failed — pick a tab and tick "Share tab audio"');
-        }
+        sysSetStatus('error', mode === 'mic'
+          ? 'Microphone capture not available in this browser'
+          : 'Tab capture not available — try Microphone source');
         return;
       }
       if (name === 'InvalidStateError') {
@@ -1223,18 +1317,28 @@
     var audioTracks = stream.getAudioTracks();
     if (!audioTracks.length) {
       try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
-      sysSetStatus('error', 'No audio track — tick "Share tab audio" in the picker');
+      sysSetStatus('error', mode === 'mic'
+        ? 'No microphone track received'
+        : 'No audio track — tick "Share tab audio" in the picker');
       return;
     }
 
-    // Show the video track (keeps the stream alive in Chrome)
-    sysEl.video.srcObject = stream;
-    sysEl.video.hidden = false;
-    sysEl.placeholder.style.display = 'none';
-    sysEl.video.muted = true;
-    sysEl.video.play().catch(function () {});
+    // Video: only in display mode
+    var vt = stream.getVideoTracks()[0];
+    if (vt) {
+      sysEl.video.srcObject = stream;
+      sysEl.video.hidden = false;
+      sysEl.placeholder.style.display = 'none';
+      sysEl.video.muted = true;
+      sysEl.video.play().catch(function () {});
+    } else {
+      sysEl.video.hidden = true;
+      sysEl.video.srcObject = null;
+      sysEl.placeholder.style.display = '';
+      sysEl.placeholderText.textContent = 'Microphone active — speak now to see captions.';
+    }
 
-    // 2) Set up PCM capture
+    // PCM pipeline
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       var ctx = new AC();
@@ -1244,7 +1348,7 @@
       var src = ctx.createMediaStreamSource(audioOnly);
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var gain = ctx.createGain();
-      gain.gain.value = 0.0001; // near-silent, keeps graph active without echo
+      gain.gain.value = mode === 'mic' ? 0 : 0.0001; // truly silent for mic (no feedback)
 
       sysState.audioCtx = ctx;
       sysState.sampleRate = ctx.sampleRate;
@@ -1285,19 +1389,16 @@
       return;
     }
 
-    // Wire "Stop sharing"
     audioTracks[0].addEventListener('ended', function () { sysStop(); });
-    var vt = stream.getVideoTracks()[0];
     if (vt) vt.addEventListener('ended', function () { sysStop(); });
 
-    // 3) Start tick loop immediately so audio buffers while model loads
     sysState.running = true;
     sysEl.start.disabled = true;
     sysEl.stop.disabled = false;
     sysEl.stage.classList.add('listening');
+    sysEl.source.disabled = true;
     sysState.intervalId = setInterval(sysTick, sysState.strideSec * 1000);
 
-    // 4) Load model (progress shown)
     var chosenModel = sysEl.model.value;
     sysState.modelReady = false;
     sysState.modelLoading = true;
@@ -1306,13 +1407,13 @@
 
     try {
       await sysWhisper.load(chosenModel);
-      if (!sysState.capturing) return; // user cancelled during load
+      if (!sysState.capturing) return;
       sysState.modelReady = true;
       sysState.modelLoading = false;
       sysState.modelName = chosenModel;
       sysSetProgress(100);
       setTimeout(function () { sysSetProgress(0); }, 700);
-      sysSetStatus('listening', 'Capturing · transcribing every ' + sysState.strideSec + 's');
+      sysSetStatus('listening', 'Capturing ' + label + ' · transcribing every ' + sysState.strideSec + 's');
       sysTick();
     } catch (e) {
       sysState.modelLoading = false;
@@ -1320,7 +1421,6 @@
       sysSetStatus('error', 'Model load failed: ' + (e.message || e).slice(0, 90));
       sysSetProgress(0);
       await sysStop();
-      return;
     }
   }
 
@@ -1352,7 +1452,6 @@
 
       var window = sysState.buffer.slice(startSample, endSample);
 
-      // RMS gate — skip silence to save CPU
       var sum = 0;
       for (var i = 0; i < window.length; i++) sum += window[i] * window[i];
       var rms = Math.sqrt(sum / window.length);
@@ -1422,6 +1521,7 @@
     try { sysEl.video.srcObject = null; } catch (e) {}
     sysEl.video.hidden = true;
     sysEl.placeholder.style.display = '';
+    sysEl.placeholderText.textContent = 'Click “Capture & transcribe” — pick a tab and tick “Share tab audio”.';
     sysState.audioCtx = null;
     sysState.processor = null;
     sysState.source = null;
@@ -1433,6 +1533,7 @@
     sysState.transcribedUntil = 0;
     sysEl.start.disabled = false;
     sysEl.stop.disabled = true;
+    sysEl.source.disabled = false;
     sysEl.stage.classList.remove('listening');
     sysSetStatus('idle', 'Stopped');
     sysSetProgress(0);
@@ -1456,7 +1557,11 @@
       sysState.modelName = null;
     }
   });
+  sysEl.source.addEventListener('change', function () {
+    sysState.sourceMode = sysEl.source.value;
+  });
 
+  // Exports (unchanged)
   sysEl.srtBtn.addEventListener('click', function () {
     if (!sysState.segments.length) return;
     var out = '\uFEFF' + sysState.segments.map(function (s, i) {
@@ -1813,7 +1918,7 @@
   });
 
   // ============================================================
-  // CLEANUP
+  // CLEANUP + INIT
   // ============================================================
   window.addEventListener('beforeunload', function () {
     try { micStop(); } catch (e) {}
@@ -1824,15 +1929,13 @@
     cancelAnimationFrame(fileState.karaokeRAF);
   });
 
-  // ============================================================
-  // INIT
-  // ============================================================
   if (!SR_OK) {
     micEl.start.disabled = true;
     micSetStatus('error', 'Web Speech API not supported — use System or File tab');
   }
   micRefreshStats(); micRefreshButtons();
   sysRefreshUI();
+  sysInitCapabilityUI();
 
 })();
 </script>
