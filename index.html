@@ -146,10 +146,11 @@
   footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:#565f6b;font-size:12px;line-height:1.6}
   @media (max-width:620px){.brand h1{font-size:17px}select,input[type="file"]{min-width:150px}.subs{padding:60px 14px 18px}.tab{padding:10px 12px;font-size:13px}}
 
-  /* === New: recording session styles === */
+  /* === Recording session styles === */
   .badge-rec{display:inline-flex;align-items:center;gap:6px;font-size:10.5px;font-weight:800;text-transform:uppercase;
     letter-spacing:.6px;padding:3px 9px;border-radius:999px;color:#ff7b72;background:rgba(248,81,73,.14);
     border:1px solid rgba(248,81,73,.45);margin-left:8px;animation:blink 1.2s infinite}
+  .badge-rec[hidden]{display:none !important}
   @keyframes blink{0%,55%{opacity:1}56%,100%{opacity:.32}}
   .pipeline{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:14px 0}
   .pipe-step{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:8px;
@@ -178,6 +179,9 @@
   .chunk-time{flex:1;font-family:ui-monospace,monospace;font-size:12px;color:var(--muted)}
   .chunk-size{font-family:ui-monospace,monospace;font-size:11.5px;color:var(--text);min-width:72px;text-align:right;font-weight:600}
   .chunk-dl{padding:5px 9px !important;font-size:11px !important}
+
+  /* New: buffer indicator in stage placeholder */
+  .bufhint{font-family:ui-monospace,monospace;font-size:11.5px;color:#79c0ff;margin-top:2px;letter-spacing:0}
 </style>
 </head>
 <body>
@@ -282,7 +286,7 @@
     </div>
   </section>
 
-  <!-- ============ SYSTEM TAB (upgraded) ============ -->
+  <!-- ============ SYSTEM TAB ============ -->
   <section id="systemPanel" hidden>
     <div id="sysCapWarn" class="warnbox"></div>
 
@@ -353,7 +357,6 @@
       </p>
     </div>
 
-    <!-- === NEW: Recording session card === -->
     <div class="card">
       <h2>Recording session <span id="sysRecBadge" class="badge-rec" hidden><i class="fa-solid fa-circle" style="font-size:6px"></i> REC</span></h2>
       <p class="desc">Chunked WAV archive runs in parallel with live captions. Download the full session or individual chunks.</p>
@@ -404,6 +407,7 @@
           <div class="icon"><i class="fa-solid fa-volume-high"></i></div>
           <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
           <span id="sysPlaceholderText">Click “Capture &amp; transcribe” — pick a tab and tick “Share tab audio”.</span>
+          <span class="bufhint" id="sysBufHint"></span>
         </div>
         <div class="subs">
           <span class="sub-line placeholder" id="sysFinal">Waiting for audio…</span>
@@ -558,9 +562,6 @@
 (function () {
   'use strict';
 
-  // ============================================================
-  // UTILITIES
-  // ============================================================
   var $ = function (id) { return document.getElementById(id); };
   var pad = function (n, l) { n = String(n); l = l || 2; while (n.length < l) n = '0' + n; return n; };
   var short = function (sec) {
@@ -599,7 +600,6 @@
     return bytes.toFixed(bytes >= 100 || i === 0 ? 0 : 1) + ' ' + u[i];
   }
 
-  // WAV encoder (Float32 mono → 16-bit PCM WAV Blob)
   function encodeWavBlob(samples, sampleRate) {
     var numSamples = samples.length;
     var buffer = new ArrayBuffer(44 + numSamples * 2);
@@ -610,12 +610,12 @@
     w(8, 'WAVE');
     w(12, 'fmt ');
     view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true);            // PCM
-    view.setUint16(22, 1, true);            // mono
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
     view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true); // byte rate
-    view.setUint16(32, 2, true);            // block align
-    view.setUint16(34, 16, true);           // bits per sample
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
     w(36, 'data');
     view.setUint32(40, numSamples * 2, true);
     var off = 44;
@@ -627,7 +627,6 @@
     return new Blob([view], { type: 'audio/wav' });
   }
 
-  // Secure context warning
   if (!window.isSecureContext) $('secureWarn').classList.add('show');
 
   // ============================================================
@@ -917,7 +916,7 @@
   }
 
   // ============================================================
-  // ============ MODE 1: LIVE MIC (Web Speech API) ============
+  // ============ MODE 1: LIVE MIC ============
   // ============================================================
   var micEl = {
     stage: $('micStage'), placeholder: $('micPlaceholder'),
@@ -980,13 +979,12 @@
     var prev = micState.segs[micState.segs.length - 1];
     var shouldMerge = prev && (start - prev.end) < 0.85 &&
       (prev.text.length + text.length) < 110 && !/[.!?…।。？！]$/.test(prev.text);
-    var seg;
     if (shouldMerge) {
       prev.text = (prev.text + ' ' + text).trim();
       prev.end = end;
-      micPaint(prev); seg = prev;
+      micPaint(prev);
     } else {
-      seg = { start: start, end: end, text: text };
+      var seg = { start: start, end: end, text: text };
       micState.segs.push(seg);
       var row = document.createElement('div');
       row.className = 'seg';
@@ -1121,7 +1119,7 @@
   });
 
   // ============================================================
-  // ============ MODE 2: SYSTEM / MIC → WHISPER + WAV RECORDER ============
+  // ============ MODE 2: SYSTEM / MIC → WHISPER + WAV ============
   // ============================================================
   var sysEl = {
     source: $('sysSource'),
@@ -1131,13 +1129,13 @@
     progress: $('sysProgress'), progressFill: $('sysProgressFill'),
     stage: $('sysStage'), video: $('sysVideo'), placeholder: $('sysPlaceholder'),
     placeholderText: $('sysPlaceholderText'),
+    bufHint: $('sysBufHint'),
     final: $('sysFinal'),
     transcript: $('sysTranscript'), empty: $('sysEmpty'), cues: $('sysCues'),
     cueCount: $('sysCueCount'), wordCount: $('sysWordCount'),
     assBtn: $('sysAssBtn'), srtBtn: $('sysSrtBtn'), vttBtn: $('sysVttBtn'),
     txtBtn: $('sysTxtBtn'), jsonBtn: $('sysJsonBtn'),
     capWarn: $('sysCapWarn'),
-    // Recorder UI
     recBadge: $('sysRecBadge'),
     pipeline: $('sysPipeline'),
     recDuration: $('sysRecDuration'), recRate: $('sysRecRate'),
@@ -1167,7 +1165,7 @@
     transcribedUntil: 0,
     windowSec: 9,
     strideSec: 3,
-    bufferMaxSec: 20,
+    bufferMaxSec: 60,
     intervalId: null,
     segments: [],
     modelReady: false,
@@ -1175,14 +1173,15 @@
     modelName: null,
     tickInProgress: false,
     fatal: null,
-    // Recorder
     recordingActive: false,
-    recChunks: [],           // [{index,startSec,endSec,sampleRate,blob,sizeBytes}]
+    recChunks: [],
     chunkAccum: new Float32Array(0),
     chunkStartSec: 0,
     chunkSec: 10,
     recUiInterval: null,
-    recUiLastCount: -1
+    recUiLastCount: -1,
+    lastRms: 0,
+    lastTickAt: 0
   };
 
   function sysSetStatus(kind, text) {
@@ -1243,10 +1242,7 @@
   sysWhisper.setProgressHandler(function (p) {
     if (!p) return;
     if (p.status === 'loading') { sysSetStatus('busy', 'Loading model…'); return; }
-    if (p.status === 'transcribing') {
-      if (sysState.modelReady) sysSetStatus('listening', 'Transcribing…');
-      return;
-    }
+    if (p.status === 'transcribing') { return; /* keep "Capturing…" status */ }
     if (p.status === 'progress' && typeof p.progress === 'number') {
       var file = p.file ? p.file.split('/').pop() : '';
       sysSetStatus('busy', 'Downloading ' + file + ' · ' + p.progress.toFixed(0) + '%');
@@ -1254,7 +1250,6 @@
     }
   });
 
-  // ─── Recorder UI ─────────────────────────────────────────────
   function initLevelMeter() {
     sysEl.levelMeter.innerHTML = '';
     for (var i = 0; i < 24; i++) {
@@ -1278,7 +1273,7 @@
       var sum = 0;
       for (var i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
       var rms = Math.sqrt(sum / buf.length);
-      var norm = Math.min(1, rms * 4);
+      var norm = Math.min(1, rms * 8);
       updateLevelBars(norm);
       sysState.analysisRAF = requestAnimationFrame(tick);
     }
@@ -1321,6 +1316,18 @@
     updatePipelineStep('chunk', sysState.recordingActive);
     updatePipelineStep('transcribe', sysState.modelReady);
     updatePipelineStep('export', has);
+
+    // Show live buffer / RMS feedback while capturing
+    if (sysState.capturing) {
+      var bufSec = dur;
+      var rmsTxt = sysState.lastRms > 0 ? sysState.lastRms.toFixed(4) : '0.0000';
+      var dbTxt = sysState.lastRms > 0 ? (20 * Math.log10(sysState.lastRms)).toFixed(1) : '-inf';
+      var modelTxt = sysState.modelReady ? 'model ✓' : 'model loading…';
+      var segTxt = sysState.segments.length ? (sysState.segments.length + ' seg') : 'no seg yet';
+      sysEl.bufHint.textContent = 'buf ' + bufSec.toFixed(1) + 's · rms ' + rmsTxt + ' (' + dbTxt + ' dB) · ' + modelTxt + ' · ' + segTxt;
+    } else {
+      sysEl.bufHint.textContent = '';
+    }
   }
   function sysRenderChunkList() {
     if (sysState.recUiLastCount === sysState.recChunks.length) return;
@@ -1355,7 +1362,7 @@
     var totalPcm = 0;
     for (var i = 0; i < sysState.recChunks.length; i++) {
       var ab = await sysState.recChunks[i].blob.arrayBuffer();
-      var pcm = new Uint8Array(ab, 44); // strip 44-byte WAV header
+      var pcm = new Uint8Array(ab, 44);
       parts.push(pcm);
       totalPcm += pcm.length;
     }
@@ -1397,13 +1404,7 @@
       durationSec: sysState.sampleRate ? sysState.totalSamples / sysState.sampleRate : 0,
       chunkSec: sysState.chunkSec,
       chunks: sysState.recChunks.map(function (c) {
-        return {
-          index: c.index,
-          startSec: c.startSec,
-          endSec: c.endSec,
-          sampleRate: c.sampleRate,
-          sizeBytes: c.sizeBytes
-        };
+        return { index: c.index, startSec: c.startSec, endSec: c.endSec, sampleRate: c.sampleRate, sizeBytes: c.sizeBytes };
       }),
       transcript: sysState.segments.map(function (s) {
         return { start: s.start, end: s.end, text: s.text };
@@ -1421,7 +1422,6 @@
     sysRefreshRecorderUI();
   }
 
-  // ─── Capability probes ──────────────────────────────────────
   function hasDisplayCapture() {
     try {
       var md = navigator.mediaDevices;
@@ -1433,9 +1433,8 @@
     } catch (e) { return false; }
   }
   function hasMicCapture() {
-    try {
-      return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function');
-    } catch (e) { return false; }
+    try { return !!(navigator.mediaDevices && typeof navigator.mediaDevices.getUserMedia === 'function'); }
+    catch (e) { return false; }
   }
   function detectMobile() {
     var ua = navigator.userAgent || '';
@@ -1455,18 +1454,13 @@
       }
     } catch (e) {}
 
-    if (mic) {
-      sysEl.source.value = 'mic';
-      sysState.sourceMode = 'mic';
-    }
+    if (mic) { sysEl.source.value = 'mic'; sysState.sourceMode = 'mic'; }
 
     var reason;
     if (detectMobile()) {
-      reason = 'Mobile browsers don\'t support screen/tab audio capture. Switched to the <b>Microphone</b> ' +
-               'source — same Whisper + WAV pipeline.';
+      reason = 'Mobile browsers don\'t support screen/tab audio capture. Switched to the <b>Microphone</b> source — same Whisper + WAV pipeline.';
     } else if (/Firefox/i.test(navigator.userAgent || '')) {
-      reason = 'This Firefox build doesn\'t expose <code>getDisplayMedia</code>. ' +
-               'Use the <b>Microphone</b> source or try Chrome / Edge on desktop.';
+      reason = 'This Firefox build doesn\'t expose <code>getDisplayMedia</code>. Use the <b>Microphone</b> source or try Chrome / Edge on desktop.';
     } else {
       reason = 'Your browser doesn\'t expose <code>getDisplayMedia</code>. Switched to the <b>Microphone</b> source.';
     }
@@ -1480,31 +1474,20 @@
     }
   }
 
-  // ─── Stream acquisition ─────────────────────────────────────
   async function sysRequestMic() {
     var md;
     try { md = navigator.mediaDevices; } catch (e) { md = null; }
     if (!md || typeof md.getUserMedia !== 'function') {
-      var e = new Error('getUserMedia unavailable');
-      e.name = 'NotSupportedError';
-      e.isMissing = true;
-      throw e;
+      var e = new Error('getUserMedia unavailable'); e.name = 'NotSupportedError'; e.isMissing = true; throw e;
     }
     try {
       return await md.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          channelCount: 1
-        }
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 }
       });
     } catch (err) {
       var n = err && err.name;
       if (n === 'NotAllowedError' || n === 'PermissionDeniedError') {
-        var e2 = new Error('Microphone permission denied');
-        e2.name = 'NotAllowedError';
-        throw e2;
+        var e2 = new Error('Microphone permission denied'); e2.name = 'NotAllowedError'; throw e2;
       }
       throw err;
     }
@@ -1512,48 +1495,32 @@
 
   async function sysRequestDisplay() {
     await new Promise(function (r) { setTimeout(r, 0); });
-
     var md;
     try { md = navigator.mediaDevices; } catch (e) { md = null; }
     if (!md) {
-      var e1 = new Error('navigator.mediaDevices is unavailable');
-      e1.name = 'NotSupportedError';
-      e1.isMissing = true;
-      throw e1;
+      var e1 = new Error('navigator.mediaDevices is unavailable'); e1.name = 'NotSupportedError'; e1.isMissing = true; throw e1;
     }
-
     var getDM;
     try { getDM = md.getDisplayMedia; } catch (e) { getDM = null; }
-
     if (typeof getDM !== 'function') {
-      if (typeof navigator.getDisplayMedia === 'function') {
-        getDM = navigator.getDisplayMedia.bind(navigator);
-      } else if (typeof navigator.webkitGetDisplayMedia === 'function') {
-        getDM = navigator.webkitGetDisplayMedia.bind(navigator);
-      } else {
-        var e2 = new Error('getDisplayMedia is not available');
-        e2.name = 'NotSupportedError';
-        e2.isMissing = true;
-        throw e2;
+      if (typeof navigator.getDisplayMedia === 'function') getDM = navigator.getDisplayMedia.bind(navigator);
+      else if (typeof navigator.webkitGetDisplayMedia === 'function') getDM = navigator.webkitGetDisplayMedia.bind(navigator);
+      else {
+        var e2 = new Error('getDisplayMedia is not available'); e2.name = 'NotSupportedError'; e2.isMissing = true; throw e2;
       }
     }
-
     var attempts = [
       { video: true, audio: true },
       { video: true, audio: true, systemAudio: 'include' }
     ];
     var lastErr = null;
     for (var i = 0; i < attempts.length; i++) {
-      try {
-        return await getDM.call(md, attempts[i]);
-      } catch (err) {
+      try { return await getDM.call(md, attempts[i]); }
+      catch (err) {
         lastErr = err;
         var n = err && err.name;
-        if (n === 'NotAllowedError' || n === 'AbortError' ||
-            n === 'PermissionDeniedError' || n === 'SecurityError' ||
-            n === 'InvalidStateError') {
-          throw err;
-        }
+        if (n === 'NotAllowedError' || n === 'AbortError' || n === 'PermissionDeniedError' ||
+            n === 'SecurityError' || n === 'InvalidStateError') throw err;
       }
     }
     throw lastErr || new Error('getDisplayMedia failed');
@@ -1564,7 +1531,6 @@
     return sysRequestDisplay();
   }
 
-  // ─── Start / stop ───────────────────────────────────────────
   async function sysStart() {
     if (sysState.running || sysState.capturing) return;
     sysState.fatal = null;
@@ -1628,7 +1594,6 @@
       sysEl.placeholderText.textContent = 'Microphone active — speak now to see captions.';
     }
 
-    // PCM pipeline
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
       var ctx = new AC();
@@ -1638,7 +1603,8 @@
       var src = ctx.createMediaStreamSource(audioOnly);
       var proc = ctx.createScriptProcessor(4096, 1, 1);
       var gain = ctx.createGain();
-      gain.gain.value = 0.0001;
+      // Silent for mic (avoid feedback), near-silent for display (keep graph alive)
+      gain.gain.value = mode === 'mic' ? 0 : 0.0001;
 
       var analyser = ctx.createAnalyser();
       analyser.fftSize = 1024;
@@ -1656,8 +1622,8 @@
       sysState.absSampleOffset = 0;
       sysState.totalSamples = 0;
       sysState.transcribedUntil = 0;
+      sysState.lastRms = 0;
 
-      // Recorder state
       sysState.recChunks = [];
       sysState.chunkAccum = new Float32Array(0);
       sysState.chunkStartSec = 0;
@@ -1668,7 +1634,12 @@
         if (!sysState.capturing) return;
         var chunk = e.inputBuffer.getChannelData(0);
 
-        // 1) Sliding window for live Whisper (capped)
+        // Compute RMS for live feedback
+        var rsum = 0;
+        for (var ri = 0; ri < chunk.length; ri++) rsum += chunk[ri] * chunk[ri];
+        sysState.lastRms = Math.sqrt(rsum / chunk.length);
+
+        // Sliding window for Whisper
         var combined = new Float32Array(sysState.buffer.length + chunk.length);
         combined.set(sysState.buffer);
         combined.set(chunk, sysState.buffer.length);
@@ -1682,12 +1653,12 @@
           sysState.buffer = combined;
         }
 
-        // 2) Full-rate chunk accumulator for WAV archive
+        // WAV chunk accumulator
         if (sysState.recordingActive) {
-          var combined2 = new Float32Array(sysState.chunkAccum.length + chunk.length);
-          combined2.set(sysState.chunkAccum);
-          combined2.set(chunk, sysState.chunkAccum.length);
-          sysState.chunkAccum = combined2;
+          var c2 = new Float32Array(sysState.chunkAccum.length + chunk.length);
+          c2.set(sysState.chunkAccum);
+          c2.set(chunk, sysState.chunkAccum.length);
+          sysState.chunkAccum = c2;
           var chunkSamples = Math.round(sysState.chunkSec * sysState.sampleRate);
           while (sysState.chunkAccum.length >= chunkSamples) {
             var cut = sysState.chunkAccum.slice(0, chunkSamples);
@@ -1699,11 +1670,9 @@
               var wavBlob = encodeWavBlob(cut, sysState.sampleRate);
               sysState.recChunks.push({
                 index: sysState.recChunks.length,
-                startSec: cs,
-                endSec: ce,
+                startSec: cs, endSec: ce,
                 sampleRate: sysState.sampleRate,
-                blob: wavBlob,
-                sizeBytes: wavBlob.size
+                blob: wavBlob, sizeBytes: wavBlob.size
               });
               sysRenderChunkList();
             } catch (ex) { console.warn('chunk encode failed', ex); }
@@ -1732,18 +1701,16 @@
     sysEl.stage.classList.add('listening');
     sysState.intervalId = setInterval(sysTick, sysState.strideSec * 1000);
 
-    // Recorder UI
     initLevelMeter();
     sysStartMeter();
     sysState.recUiInterval = setInterval(sysRefreshRecorderUI, 400);
     sysRenderChunkList();
     sysRefreshRecorderUI();
 
-    // Load model
     var chosenModel = sysEl.model.value;
     sysState.modelReady = false;
     sysState.modelLoading = true;
-    sysSetStatus('busy', 'Loading ' + chosenModel.split('/').pop() + '…');
+    sysSetStatus('busy', 'Buffering audio · loading ' + chosenModel.split('/').pop() + '…');
     sysSetProgress(1);
 
     try {
@@ -1771,6 +1738,15 @@
     if (sysState.tickInProgress) return;
     if (!sysState.buffer.length) return;
     sysState.tickInProgress = true;
+    sysState.lastTickAt = performance.now();
+
+    // Safety: release lock if a tick somehow hangs
+    var _lockTimer = setTimeout(function () {
+      if (sysState.tickInProgress) {
+        console.warn('[sys] transcribe lock timeout — releasing');
+        sysState.tickInProgress = false;
+      }
+    }, 25000);
 
     try {
       var bufferStartSec = sysState.absSampleOffset / sysState.sampleRate;
@@ -1791,12 +1767,14 @@
         windowStartSec = bufferStartSec + startSample / sysState.sampleRate;
       }
 
+      var originalDurSec = (endSample - startSample) / sysState.sampleRate;
       var window = sysState.buffer.slice(startSample, endSample);
 
+      // Lower RMS gate — accept very quiet audio
       var sum = 0;
       for (var i = 0; i < window.length; i++) sum += window[i] * window[i];
       var rms = Math.sqrt(sum / window.length);
-      if (rms < 0.0035) return;
+      if (rms < 0.0005) return;
 
       try {
         if (sysState.sampleRate !== 16000) {
@@ -1831,6 +1809,20 @@
         newSegs.push({ text: txt, start: absStart, end: absEnd });
         if (absEnd > sysState.transcribedUntil) sysState.transcribedUntil = absEnd;
       }
+
+      // FALLBACK: if chunks produced nothing usable but Whisper returned plain text, use it
+      if (newSegs.length === 0 && res && typeof res.text === 'string') {
+        var fullText = res.text.trim();
+        if (fullText && fullText.length > 1) {
+          var fbStart = windowStartSec;
+          var fbEnd = windowStartSec + originalDurSec;
+          if (fbEnd > sysState.transcribedUntil + 0.1) {
+            newSegs.push({ text: fullText, start: fbStart, end: fbEnd });
+            sysState.transcribedUntil = fbEnd;
+          }
+        }
+      }
+
       if (newSegs.length) {
         var combinedText = newSegs.map(function (s) { return s.text; }).join(' ').replace(/\s+/g, ' ').trim();
         var firstStart = newSegs[0].start;
@@ -1839,7 +1831,10 @@
       }
     } catch (e) {
       console.warn('[sys whisper]', e);
+      // Surface to user but don't kill the session
+      sysEl.bufHint.textContent = '⚠ transcribe error: ' + (e.message || e).slice(0, 60);
     } finally {
+      clearTimeout(_lockTimer);
       sysState.tickInProgress = false;
     }
   }
@@ -1849,7 +1844,7 @@
     sysState.running = false;
     sysState.capturing = false;
 
-    // Flush any pending partial chunk to the archive
+    // Flush partial WAV chunk
     if (sysState.chunkAccum.length > 0 && sysState.sampleRate && sysState.recordingActive) {
       try {
         var wavBlob = encodeWavBlob(sysState.chunkAccum, sysState.sampleRate);
@@ -1857,11 +1852,9 @@
         var ce = cs + sysState.chunkAccum.length / sysState.sampleRate;
         sysState.recChunks.push({
           index: sysState.recChunks.length,
-          startSec: cs,
-          endSec: ce,
+          startSec: cs, endSec: ce,
           sampleRate: sysState.sampleRate,
-          blob: wavBlob,
-          sizeBytes: wavBlob.size
+          blob: wavBlob, sizeBytes: wavBlob.size
         });
         sysState.chunkStartSec = ce;
         sysState.chunkAccum = new Float32Array(0);
@@ -1895,6 +1888,7 @@
     sysState.absSampleOffset = 0;
     sysState.totalSamples = 0;
     sysState.transcribedUntil = 0;
+    sysState.lastRms = 0;
 
     sysEl.start.disabled = false;
     sysEl.stop.disabled = true;
@@ -1907,7 +1901,6 @@
     sysRefreshRecorderUI();
   }
 
-  // ─── Wiring ─────────────────────────────────────────────────
   sysEl.start.addEventListener('click', function () {
     sysStart().catch(function (e) { console.error(e); sysSetStatus('error', 'Unexpected: ' + (e.message || e)); });
   });
@@ -1925,14 +1918,12 @@
   sysEl.source.addEventListener('change', function () {
     sysState.sourceMode = sysEl.source.value;
   });
-
   sysEl.recWav.addEventListener('click', function () {
     sysDownloadFullWav().catch(function (e) { console.warn(e); });
   });
   sysEl.recMeta.addEventListener('click', sysDownloadMetadata);
   sysEl.recClear.addEventListener('click', sysClearRecordings);
 
-  // Transcript exports
   sysEl.srtBtn.addEventListener('click', function () {
     if (!sysState.segments.length) return;
     var out = '\uFEFF' + sysState.segments.map(function (s, i) {
@@ -2282,9 +2273,6 @@
     downloadBlob('words_' + fileStamp() + '.json', JSON.stringify(fileState.words, null, 2), 'application/json');
   });
 
-  // ============================================================
-  // CLEANUP + INIT
-  // ============================================================
   window.addEventListener('beforeunload', function () {
     try { micStop(); } catch (e) {}
     try { sysStop(); } catch (e) {}
