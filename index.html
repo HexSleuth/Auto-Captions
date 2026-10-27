@@ -8,6 +8,58 @@
 <title>Auto Captions · System Audio · Auto Detect · SRT/VTT (No API Key)</title>
 <meta name="description" content="Browser-only live captions with system/tab audio capture, auto language detection, caption translation and SRT/VTT export. No API key required." />
 
+<!-- ============================================================
+     FORCED DARK MODE — enforced by JavaScript only.
+     Runs before the CSS paints so no light-mode flash can occur.
+     ============================================================ -->
+<script>
+(function forceDarkMode() {
+  try {
+    var html = document.documentElement;
+
+    /* 1) Force browser-native UI (scrollbars, <select>, <input type=file>,
+          date pickers, form controls) into dark mode. */
+    html.style.colorScheme = 'dark';
+
+    /* 2) Stamp theme markers so any third-party CSS can key off them. */
+    html.setAttribute('data-theme', 'dark');
+    html.setAttribute('data-bs-theme', 'dark');
+
+    /* 3) Keep <meta name="theme-color"> in sync (mobile browser chrome). */
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'theme-color';
+      document.head.appendChild(meta);
+    }
+    meta.content = '#0d1117';
+
+    /* 4) Override prefers-color-scheme so any library CSS that still
+          branches on "(prefers-color-scheme: light)" is forced to false.
+          We do NOT touch "(prefers-color-scheme: dark)". */
+    var nativeMM = window.matchMedia.bind(window);
+    window.matchMedia = function (q) {
+      if (typeof q === 'string' && /prefers-color-scheme\s*:\s*light/i.test(q)) {
+        return nativeMM('(prefers-color-scheme: dark)');
+      }
+      return nativeMM(q);
+    };
+
+    /* 5) Lock the background colour on <html> immediately so even before
+          the main stylesheet loads there is no white flash. */
+    html.style.background = '#0d1117';
+    html.style.color = '#e6edf3';
+  } catch (e) {
+    /* Non-fatal — CSS alone still renders dark. */
+  }
+})();
+</script>
+
+<!-- FontAwesome 6 (free) -->
+<link rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+      crossorigin="anonymous" referrerpolicy="no-referrer" />
+
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --border:#30363d;
@@ -28,6 +80,7 @@
     -webkit-font-smoothing:antialiased;
   }
 
+  /* ---------- Header ---------- */
   .topbar{
     max-width:1080px;margin:0 auto;padding:22px 20px 6px;
     display:flex;align-items:center;justify-content:space-between;
@@ -36,10 +89,11 @@
   .brand{display:flex;align-items:center;gap:14px;min-width:250px}
   .logo{
     width:46px;height:46px;flex:0 0 46px;border-radius:12px;
-    display:grid;place-items:center;font-weight:800;font-size:15px;letter-spacing:.5px;color:#fff;
+    display:grid;place-items:center;
     background:linear-gradient(145deg,#2f81f7,#1f6feb 55%,#3fb950);
     box-shadow:0 8px 22px rgba(47,129,247,.35);
   }
+  .logo i{font-size:24px;color:#fff}
   .brand h1{
     margin:0;font-size:19px;letter-spacing:-.2px;
     display:flex;align-items:center;gap:8px;flex-wrap:wrap;
@@ -50,6 +104,7 @@
     padding:3px 8px;border-radius:999px;color:#7ee787;
     background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);
   }
+  .topbar-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
   .gtranslate_wrapper{min-width:180px;display:flex;justify-content:flex-end;align-items:center}
   .gt-fallback{
     font-size:13px;color:#79c0ff;text-decoration:none;
@@ -57,6 +112,18 @@
   }
   .gt-fallback:hover{border-color:var(--accent)}
 
+  /* JS-forced dark badge */
+  .theme-lock{
+    display:inline-flex;align-items:center;gap:6px;
+    padding:5px 10px;border-radius:999px;
+    font-size:11px;font-weight:700;letter-spacing:.3px;
+    background:rgba(210,153,34,.1);
+    border:1px solid rgba(210,153,34,.4);
+    color:#ffd8a8;white-space:nowrap;
+  }
+  .theme-lock i{font-size:10px}
+
+  /* ---------- Layout ---------- */
   .wrap{max-width:1080px;margin:0 auto;padding:12px 20px 70px}
   .card{
     background:linear-gradient(180deg,#161b22,#12161d);
@@ -70,6 +137,7 @@
   }
   .card .desc{margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.55}
 
+  /* ---------- Stage ---------- */
   .stage{
     position:relative;width:100%;aspect-ratio:16/9;
     background:#05070a;border:1px solid var(--border);border-radius:12px;
@@ -89,7 +157,7 @@
     border:2px dashed #30363d;display:grid;place-items:center;
     transition:border-color .25s, background .25s;
   }
-  .stage-placeholder .icon svg{width:30px;height:30px;opacity:.65}
+  .stage-placeholder .icon i{font-size:26px;opacity:.65}
   .stage-placeholder span{font-size:12.5px;letter-spacing:.4px}
 
   .bars{display:flex;gap:5px;align-items:flex-end;height:44px}
@@ -112,13 +180,14 @@
 
   .fs-btn{
     position:absolute;top:10px;right:10px;z-index:5;
-    width:34px;height:34px;padding:0;justify-content:center;
+    width:36px;height:36px;padding:0;justify-content:center;
     background:rgba(13,17,23,.72);backdrop-filter:blur(4px);
     border:1px solid var(--border);color:var(--text);border-radius:9px;cursor:pointer;
     display:inline-flex;align-items:center;transition:background .15s,border-color .15s;
+    font-family:inherit;
   }
   .fs-btn:hover{background:rgba(48,54,61,.95);border-color:#8b949e}
-  .fs-btn svg{width:16px;height:16px}
+  .fs-btn i{font-size:15px}
 
   .resume-audio{
     position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
@@ -127,14 +196,17 @@
     border:0;border-radius:12px;font-weight:700;font-size:14px;
     cursor:pointer;box-shadow:0 10px 30px rgba(47,129,247,.5);
     font-family:inherit;
+    display:inline-flex;align-items:center;gap:10px;
     animation:pulse-scale 2s infinite;
   }
   .resume-audio[hidden]{display:none}
+  .resume-audio i{font-size:16px}
   @keyframes pulse-scale{
     0%,100%{transform:translate(-50%,-50%) scale(1)}
     50%{transform:translate(-50%,-50%) scale(1.05)}
   }
 
+  /* ---------- Subtitle overlay ---------- */
   .subs{
     position:absolute;left:0;right:0;bottom:0;
     padding:80px 24px 26px;
@@ -164,6 +236,7 @@
     text-shadow:0 2px 10px rgba(0,0,0,.95);
   }
 
+  /* ---------- Controls ---------- */
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
   .row + .row{margin-top:14px}
   .field{display:flex;flex-direction:column;gap:6px}
@@ -193,6 +266,7 @@
     display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
     font-family:inherit;
   }
+  .btn i{font-size:13.5px;line-height:1}
   .btn:hover:not(:disabled){background:#30363d;border-color:#8b949e}
   .btn:active:not(:disabled){transform:translateY(1px)}
   .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -214,11 +288,15 @@
     background:#0d1117;border:1px solid var(--border);color:var(--muted);
     min-height:38px;
   }
-  .dot{width:9px;height:9px;border-radius:50%;background:#484f58;flex:0 0 9px}
+  .dot{
+    font-size:8px;flex:0 0 8px;
+    color:#484f58;line-height:1;display:inline-block;
+    transition:color .2s;
+  }
   .status.listening{color:#7ee787;border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.08)}
-  .status.listening .dot{background:var(--green);animation:pulse 1.15s infinite}
+  .status.listening .dot{color:var(--green);animation:pulse 1.15s infinite}
   .status.error{color:#ff7b72;border-color:rgba(248,81,73,.45);background:rgba(248,81,73,.08)}
-  .status.error .dot{background:var(--red)}
+  .status.error .dot{color:var(--red)}
   @keyframes pulse{
     0%{box-shadow:0 0 0 0 rgba(63,185,80,.55)}
     70%{box-shadow:0 0 0 9px rgba(63,185,80,0)}
@@ -233,10 +311,12 @@
     transition:background .15s,border-color .15s;
     max-width:100%;
   }
+  .chip i{font-size:12px}
   .chip:hover{background:rgba(47,129,247,.2);border-color:var(--accent)}
   .chip[hidden]{display:none}
   .chip.busy{background:rgba(210,153,34,.14);border-color:rgba(210,153,34,.5);color:#ffd8a8}
 
+  /* ---------- Audio meter ---------- */
   .meter-wrap{
     display:flex;align-items:center;gap:12px;margin-top:14px;
   }
@@ -257,8 +337,11 @@
   .meter-wrap .src-tag{
     flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.5px;
     text-transform:uppercase;color:#7ee787;
+    display:inline-flex;align-items:center;gap:5px;
   }
+  .meter-wrap .src-tag i{font-size:11px}
 
+  /* ---------- Transcript ---------- */
   .transcript{
     margin-top:14px;max-height:320px;overflow-y:auto;
     border:1px solid var(--border);border-radius:12px;
@@ -284,6 +367,7 @@
 
   .meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
   .meta b{color:var(--text);font-weight:650}
+  .meta i{font-size:11px;margin-right:4px;opacity:.7}
 
   .hint{margin:12px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
   .hint code{
@@ -305,6 +389,7 @@
     background:rgba(210,153,34,.1);border:1px solid rgba(210,153,34,.4);
   }
   .warnbox.show{display:block}
+  .warnbox i{margin-right:6px}
   .warnbox code{background:rgba(0,0,0,.35);border-radius:4px;padding:1px 5px}
 
   .vol-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
@@ -329,6 +414,7 @@
     .brand h1{font-size:17px}
     select, input[type="file"]{min-width:170px}
     .subs{padding:60px 14px 18px}
+    .topbar-right{width:100%;justify-content:space-between}
   }
 </style>
 </head>
@@ -336,30 +422,39 @@
 
 <header class="topbar">
   <div class="brand">
-    <div class="logo">CC</div>
+    <div class="logo"><i class="fa-solid fa-closed-captioning"></i></div>
     <div>
       <h1>Auto Captions <span class="badge">No API Key</span></h1>
       <p class="sub">System audio listener · auto language detect · SRT / VTT export</p>
     </div>
   </div>
-  <div class="gtranslate_wrapper" id="gtWrapper"></div>
+  <div class="topbar-right">
+    <div class="theme-lock" title="Dark mode is enforced by JavaScript">
+      <i class="fa-solid fa-lock"></i>
+      <span>Dark · JS</span>
+    </div>
+    <div class="gtranslate_wrapper" id="gtWrapper"></div>
+  </div>
 </header>
 
 <main class="wrap">
 
   <div id="supportWarn" class="warnbox">
+    <i class="fa-solid fa-triangle-exclamation"></i>
     <strong>Browser not supported.</strong> This tool uses the Web Speech API.
     Open it in <b>Google Chrome</b>, <b>Microsoft Edge</b> or <b>Safari</b>.
     (Firefox has not implemented <code>SpeechRecognition</code> yet.)
   </div>
 
   <div id="secureWarn" class="warnbox">
+    <i class="fa-solid fa-lock"></i>
     <strong>Microphone blocked.</strong> Speech recognition requires a
     <b>secure context</b>: <code>https://</code> or <code>http://localhost</code>.
     Opening the file with <code>file://</code> won't work.
   </div>
 
   <div id="sysWarn" class="warnbox">
+    <i class="fa-solid fa-volume-xmark"></i>
     <strong>No audio track was shared.</strong> In the Chrome/Edge picker, tick
     <code>Share tab audio</code> (tab) or <code>Share system audio</code> (screen)
     before clicking <b>Share</b>. If your OS/browser doesn't offer it, use the
@@ -367,26 +462,21 @@
   </div>
 
   <div id="loopWarn" class="warnbox">
+    <i class="fa-solid fa-arrows-spin"></i>
     <strong>Possible echo loop.</strong> You're capturing <em>entire screen</em> audio
     while monitoring through speakers — the monitor playback gets re-captured and echoes.
     Fix: capture a <b>single Chrome tab</b> instead, or send the monitor to a
     <b>virtual cable</b> (see the setup guide below).
   </div>
 
+  <!-- STAGE -->
   <section class="card">
     <h2>Subtitle stage</h2>
     <p class="desc">Live subtitles render here. Feed it your microphone, or capture system / tab audio below.</p>
 
     <div class="stage" id="stage">
       <div class="stage-placeholder" id="stagePlaceholder">
-        <div class="icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-            <path d="M19 10v1a7 7 0 0 1-14 0v-1"/>
-            <line x1="12" y1="19" x2="12" y2="23"/>
-            <line x1="8" y1="23" x2="16" y2="23"/>
-          </svg>
-        </div>
+        <div class="icon"><i class="fa-solid fa-microphone"></i></div>
         <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
         <span id="phText">Press “Start listening” and begin speaking…</span>
       </div>
@@ -394,15 +484,13 @@
       <video id="player" controls playsinline preload="metadata" hidden></video>
 
       <button class="fs-btn" id="fsBtn" type="button" title="Fullscreen" aria-label="Toggle fullscreen">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M8 3H5a2 2 0 0 0-2 2v3"/>
-          <path d="M16 3h3a2 2 0 0 1 2 2v3"/>
-          <path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
-          <path d="M8 21H5a2 2 0 0 1-2-2v-3"/>
-        </svg>
+        <i id="fsIcon" class="fa-solid fa-expand"></i>
       </button>
 
-      <button class="resume-audio" id="resumeAudioBtn" type="button" hidden>🔈 Click to enable audio playback</button>
+      <button class="resume-audio" id="resumeAudioBtn" type="button" hidden>
+        <i class="fa-solid fa-volume-high"></i>
+        <span>Click to enable audio playback</span>
+      </button>
 
       <div class="subs" id="subs">
         <span class="sub-line placeholder" id="subFinal">Press “Start listening” and begin speaking…</span>
@@ -412,12 +500,13 @@
     </div>
   </section>
 
+  <!-- CONTROLS -->
   <section class="card">
     <h2>Input source &amp; controls</h2>
     <p class="desc">
       <b>Microphone</b> transcribes the OS default input.
-      <b>System / tab audio</b> captures your device's internal sound, then
-      <em>monitors</em> it out loud (or into a virtual cable) so the recogniser can hear it.
+      <b>System / tab audio</b> captures internal sound, then <em>monitors</em> it out
+      loud (or into a virtual cable) so the recogniser can hear it.
     </p>
 
     <div class="row">
@@ -431,7 +520,10 @@
 
       <div class="field" id="shareField" hidden>
         <span>Audio capture</span>
-        <button id="shareBtn" class="btn" type="button">🔗 Capture system audio</button>
+        <button id="shareBtn" class="btn" type="button">
+          <i id="shareIcon" class="fa-solid fa-link"></i>
+          <span id="shareLabel">Capture system audio</span>
+        </button>
       </div>
 
       <label class="field">
@@ -522,10 +614,16 @@
 
       <div class="field">
         <span>Status</span>
-        <div id="status" class="status"><span class="dot"></span><span id="statusText">Idle</span></div>
+        <div id="status" class="status">
+          <i class="dot fa-solid fa-circle"></i>
+          <span id="statusText">Idle</span>
+        </div>
       </div>
 
-      <button id="detectChip" class="chip" type="button" hidden></button>
+      <button id="detectChip" class="chip" type="button" hidden>
+        <i id="chipIcon" class="fa-solid fa-wand-magic-sparkles"></i>
+        <span id="chipLabel"></span>
+      </button>
     </div>
 
     <div class="row" id="monitorRow" hidden>
@@ -534,30 +632,43 @@
         <div class="vol-row">
           <input type="range" id="volRange" min="0" max="100" value="65" />
           <span id="volLabel" style="font-size:12px;color:var(--muted);min-width:38px">65%</span>
-          <button id="muteBtn" class="btn ghost" type="button">🔊 Audible</button>
+          <button id="muteBtn" class="btn ghost" type="button">
+            <i id="muteIcon" class="fa-solid fa-volume-high"></i>
+            <span id="muteLabel">Audible</span>
+          </button>
         </div>
       </div>
 
       <label class="field">
         <span>Monitor output device</span>
-        <select id="outDev">
-          <option value="">System default</option>
-        </select>
+        <select id="outDev"><option value="">System default</option></select>
       </label>
 
-      <button id="stopShareBtn" class="btn ghost" type="button" disabled>✕ Stop capture</button>
+      <button id="stopShareBtn" class="btn ghost" type="button" disabled>
+        <i class="fa-solid fa-xmark"></i>
+        <span>Stop capture</span>
+      </button>
     </div>
 
     <div class="meter-wrap" id="meterWrap" hidden>
-      <span class="src-tag">IN</span>
+      <span class="src-tag"><i class="fa-solid fa-wave-square"></i> IN</span>
       <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
       <span class="meter-label" id="meterLabel">—</span>
     </div>
 
     <div class="row" style="margin-top:16px">
-      <button id="startBtn" class="btn primary" type="button">● Start listening</button>
-      <button id="stopBtn"  class="btn stop" type="button" disabled>■ Stop</button>
-      <button id="clearBtn" class="btn ghost" type="button">✕ Clear</button>
+      <button id="startBtn" class="btn primary" type="button">
+        <i class="fa-solid fa-microphone"></i>
+        <span>Start listening</span>
+      </button>
+      <button id="stopBtn" class="btn stop" type="button" disabled>
+        <i class="fa-solid fa-stop"></i>
+        <span>Stop</span>
+      </button>
+      <button id="clearBtn" class="btn ghost" type="button">
+        <i class="fa-solid fa-eraser"></i>
+        <span>Clear</span>
+      </button>
     </div>
 
     <p class="hint">
@@ -572,19 +683,21 @@
       means routing that audio back into a microphone input. Two ways:
       <ol>
         <li>
-          <strong>Speakers → mic (zero install).</strong> Choose <b>System / tab audio</b>,
-          click <b>Capture system audio</b>, pick a <b>Chrome tab</b> (not "Entire screen")
-          and tick <b>Share tab audio</b>. Keep <b>Monitor volume</b> audible — your speakers
-          play the tab, the mic hears it, captions appear. Chrome shows a "Share this tab
-          instead" button in the picker — use that for a single tab.
+          <strong>Virtual cable (recommended — silent &amp; reliable).</strong> Install a loopback
+          driver — <code>VB-CABLE</code> (Windows), <code>BlackHole</code> (macOS) or
+          <code>pactl load-module module-null-sink</code> (Linux). In the
+          <b>Monitor output device</b> dropdown pick the cable (e.g. <em>CABLE Input</em>).
+          Set your <b>OS default microphone</b> to the cable's <em>output</em> side
+          (e.g. <em>CABLE Output</em>). Now the recogniser hears the cable directly —
+          no speakers, no echo.
         </li>
         <li>
-          <strong>Virtual cable (fully internal, silent).</strong> Install a loopback driver
-          — <code>VB-CABLE</code> (Windows), <code>BlackHole</code> (macOS) or
-          <code>pactl load-module module-null-sink</code> (Linux). In the
-          <b>Monitor output device</b> dropdown pick the cable. Set your
-          <b>OS default microphone</b> to the same cable's output side. Now the recogniser
-          hears the cable directly — no speakers needed, no echo loop possible.
+          <strong>Speakers → mic (zero install, less reliable).</strong> Choose
+          <b>System / tab audio</b>, click <b>Capture system audio</b>, pick a
+          <b>Chrome tab</b> (not "Entire screen") and tick <b>Share tab audio</b>.
+          Keep <b>Monitor volume</b> audible. The mic picks up the speaker sound — but note
+          that the recogniser's built-in echo cancellation may filter it out. If captions
+          don't appear, switch to the cable method above.
         </li>
       </ol>
       <strong>Auto-detect:</strong> recognition starts in your browser language; if nothing
@@ -593,6 +706,7 @@
     </p>
   </section>
 
+  <!-- OPTIONAL MEDIA -->
   <section class="card">
     <h2>Optional — caption an audio / video file</h2>
     <p class="desc">
@@ -606,19 +720,35 @@
         <span>Media file</span>
         <input type="file" id="mediaFile" accept="audio/*,video/*" />
       </label>
-      <button id="clearMedia" class="btn ghost" type="button" disabled>Remove file</button>
+      <button id="clearMedia" class="btn ghost" type="button" disabled>
+        <i class="fa-solid fa-trash-can"></i>
+        <span>Remove file</span>
+      </button>
     </div>
   </section>
 
+  <!-- TRANSCRIPT -->
   <section class="card">
     <h2>Transcript &amp; export</h2>
     <p class="desc">Every finalized phrase is timestamped and stored below. Translations (if enabled) are included in exports.</p>
 
     <div class="row">
-      <button id="srtBtn"  class="btn" type="button" disabled>⬇ Download .SRT</button>
-      <button id="vttBtn"  class="btn" type="button" disabled>⬇ Download .VTT</button>
-      <button id="txtBtn"  class="btn" type="button" disabled>⬇ Download .TXT</button>
-      <button id="copyBtn" class="btn ghost" type="button" disabled>⧉ Copy text</button>
+      <button id="srtBtn" class="btn" type="button" disabled>
+        <i class="fa-solid fa-download"></i>
+        <span>Download .SRT</span>
+      </button>
+      <button id="vttBtn" class="btn" type="button" disabled>
+        <i class="fa-solid fa-download"></i>
+        <span>Download .VTT</span>
+      </button>
+      <button id="txtBtn" class="btn" type="button" disabled>
+        <i class="fa-solid fa-download"></i>
+        <span>Download .TXT</span>
+      </button>
+      <button id="copyBtn" class="btn ghost" type="button" disabled>
+        <i class="fa-solid fa-copy"></i>
+        <span>Copy text</span>
+      </button>
     </div>
 
     <div id="transcript" class="transcript">
@@ -627,9 +757,9 @@
     </div>
 
     <div class="meta">
-      <span>Cues: <b id="cueCount">0</b></span>
-      <span>Words: <b id="wordCount">0</b></span>
-      <span>Duration: <b id="duration">00:00</b></span>
+      <span><i class="fa-solid fa-list-check"></i>Cues: <b id="cueCount">0</b></span>
+      <span><i class="fa-solid fa-font"></i>Words: <b id="wordCount">0</b></span>
+      <span><i class="fa-solid fa-clock"></i>Duration: <b id="duration">00:00</b></span>
     </div>
   </section>
 
@@ -661,21 +791,22 @@
 (function () {
   'use strict';
 
-  /* ============================================================
-     1) Element cache
-     ============================================================ */
   var $ = function (id) { return document.getElementById(id); };
 
   var el = {
     source:       $('source'),
     shareField:   $('shareField'),
     shareBtn:     $('shareBtn'),
+    shareIcon:    $('shareIcon'),
+    shareLabel:   $('shareLabel'),
     stopShareBtn: $('stopShareBtn'),
     monitorRow:   $('monitorRow'),
     monitor:      $('monitor'),
     volRange:     $('volRange'),
     volLabel:     $('volLabel'),
     muteBtn:      $('muteBtn'),
+    muteIcon:     $('muteIcon'),
+    muteLabel:    $('muteLabel'),
     outDev:       $('outDev'),
     meterWrap:    $('meterWrap'),
     meterFill:    $('meterFill'),
@@ -692,8 +823,11 @@
     status:       $('status'),
     statusText:   $('statusText'),
     chip:         $('detectChip'),
+    chipIcon:     $('chipIcon'),
+    chipLabel:    $('chipLabel'),
     stage:        $('stage'),
     fsBtn:        $('fsBtn'),
+    fsIcon:       $('fsIcon'),
     resumeBtn:    $('resumeAudioBtn'),
     placeholder:  $('stagePlaceholder'),
     phText:       $('phText'),
@@ -718,9 +852,6 @@
     gtWrapper:    $('gtWrapper')
   };
 
-  /* ============================================================
-     2) Environment checks
-     ============================================================ */
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var SR_OK = !!SR;
 
@@ -747,44 +878,19 @@
     }
   }, 3000);
 
-  /* ============================================================
-     3) State
-     ============================================================ */
   var state = {
-    active:    false,
-    rec:       null,
-    timer:     null,
-    ticker:    null,
-    gen:       0,
-    offset:    0,
-    t0:        0,
-    lastEnd:   0,
-    segs:      [],
-    trOn:      false,
-    fails:     0,
-    errs:      0,
-    autoLang:  null,
-    scanIdx:   -1,
-    noSpeech:  0,
-    detCand:   null,
-    detStreak: 0
+    active:false, rec:null, timer:null, ticker:null, gen:0,
+    offset:0, t0:0, lastEnd:0, segs:[],
+    trOn:false, fails:0, errs:0,
+    autoLang:null, scanIdx:-1, noSpeech:0, detCand:null, detStreak:0
   };
 
   var cap = {
-    stream:      null,
-    actx:        null,
-    analyser:    null,
-    data:        null,
-    raf:         0,
-    volume:      0.65,
-    muted:       false,
-    wholeScreen: false,
-    cableMode:   false
+    stream:null, actx:null, analyser:null, data:null, raf:0,
+    volume:0.65, muted:false, wholeScreen:false, cableMode:false,
+    silenceTimer:null
   };
 
-  /* ============================================================
-     4) Language helpers
-     ============================================================ */
   function browserLang() {
     return String((navigator.languages && navigator.languages[0]) ||
                    navigator.language || 'en-US');
@@ -878,9 +984,6 @@
     return null;
   }
 
-  /* ============================================================
-     5) Small helpers
-     ============================================================ */
   function pad(n, len) {
     n = String(n);
     while (n.length < (len || 2)) n = '0' + n;
@@ -946,9 +1049,6 @@
       .test(label || '');
   }
 
-  /* ============================================================
-     6) UI helpers
-     ============================================================ */
   function setStatus(kind, text) {
     el.status.className = 'status' + (kind ? ' ' + kind : '');
     el.statusText.textContent = text;
@@ -988,7 +1088,8 @@
     var code = state.autoLang || browserLang();
     el.chip.hidden = false;
     el.chip.classList.remove('busy');
-    el.chip.textContent = '🌐 Auto · ' + (langName(code) || code) + ' · ' + code;
+    el.chipIcon.className = 'fa-solid fa-wand-magic-sparkles';
+    el.chipLabel.textContent = 'Auto · ' + (langName(code) || code) + ' · ' + code;
     el.chip.title = 'Auto-detected language — click to reset to your browser language';
   }
 
@@ -996,18 +1097,17 @@
     if (!el.chip || el.lang.value !== 'auto') return;
     el.chip.hidden = false;
     el.chip.classList.add('busy');
-    el.chip.textContent = msg;
+    el.chipIcon.className = 'fa-solid fa-wand-magic-sparkles';
+    el.chipLabel.textContent = msg;
     clearTimeout(flashTimer);
     flashTimer = setTimeout(updateLangHint, 2400);
   }
 
   function updateSubs() {
     var last = state.segs[state.segs.length - 1];
-
     if (last) {
       el.subFinal.classList.remove('placeholder');
       el.subFinal.textContent = last.text;
-
       if (state.trOn && last.tr) {
         el.subTrans.textContent = last.tr;
         el.subTrans.hidden = false;
@@ -1035,45 +1135,31 @@
     }
 
     if (isSys) {
-      if (cap.stream) {
-        el.phText.textContent = 'System audio captured — press “Start listening”';
-      } else {
-        el.phText.textContent = 'Press “Capture system audio”, then “Start listening”';
-      }
+      el.phText.textContent = cap.stream
+        ? 'System audio captured — press “Start listening”'
+        : 'Press “Capture system audio”, then “Start listening”';
     } else if (!state.active) {
       el.phText.textContent = 'Press “Start listening” and begin speaking…';
     }
   }
 
-  /* ============================================================
-     7) Transcript rows
-     ============================================================ */
   function buildRow(seg) {
     var row = document.createElement('div');
     row.className = 'seg';
-
     var time = document.createElement('span');
     time.className = 'seg-time';
-
     var wrap = document.createElement('span');
     wrap.className = 'seg-text';
-
     var orig = document.createElement('span');
     orig.className = 'seg-orig';
-
     var tr = document.createElement('span');
     tr.className = 'seg-tr';
     tr.hidden = true;
-
     wrap.appendChild(orig);
     wrap.appendChild(tr);
     row.appendChild(time);
     row.appendChild(wrap);
-
-    seg.el     = row;
-    seg.timeEl = time;
-    seg.origEl = orig;
-    seg.trEl   = tr;
+    seg.el = row; seg.timeEl = time; seg.origEl = orig; seg.trEl = tr;
     return row;
   }
 
@@ -1081,29 +1167,19 @@
     if (!seg.el) return;
     seg.timeEl.textContent = short(seg.start) + ' → ' + short(seg.end);
     seg.origEl.textContent = seg.text;
-    if (seg.tr) {
-      seg.trEl.textContent = seg.tr;
-      seg.trEl.hidden = false;
-    } else {
-      seg.trEl.textContent = '';
-      seg.trEl.hidden = true;
-    }
+    if (seg.tr) { seg.trEl.textContent = seg.tr; seg.trEl.hidden = false; }
+    else { seg.trEl.textContent = ''; seg.trEl.hidden = true; }
   }
 
-  /* ============================================================
-     8) Caption translation
-     ============================================================ */
   var trCache = Object.create(null);
   var trFailures = 0;
 
   function translateText(text, target) {
     var key = target + '|' + text;
     if (trCache[key]) return Promise.resolve(trCache[key]);
-
     var url = 'https://translate.googleapis.com/translate_a/single' +
               '?client=gtx&dj=1&sl=auto&tl=' + encodeURIComponent(target) +
               '&dt=t&q=' + encodeURIComponent(text);
-
     return fetch(url).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
@@ -1124,7 +1200,6 @@
     if (!state.trOn) return;
     var target = resolveTargetLang();
     if (!target) return;
-
     clearTimeout(seg.trTimer);
     seg.trTimer = setTimeout(function () {
       translateText(seg.text, target).then(function (out) {
@@ -1144,70 +1219,52 @@
     }, 220);
   }
 
-  /* ============================================================
-     9) Auto-detect
-     ============================================================ */
   function applyAutoLang(code, reason) {
     state.autoLang  = code;
     state.scanIdx   = SCAN_LIST.indexOf(code);
     state.detCand   = null;
     state.detStreak = 0;
     updateLangHint();
-    flashChip('🌐 Auto → ' + (langName(code) || code) + (reason ? ' · ' + reason : ''));
+    flashChip('Auto → ' + (langName(code) || code) + (reason ? ' · ' + reason : ''));
     restartRecognizer();
   }
 
   function analyzeAuto(seg) {
     if (el.lang.value !== 'auto') return;
     if (!seg || !seg.text) return;
-
     var det = detectScript(seg.text);
     if (!det) { state.detStreak = 0; state.detCand = null; return; }
-
     var current = state.autoLang || browserLang();
     if (String(det.code).split('-')[0] === String(current).split('-')[0]) {
-      state.detStreak = 0;
-      state.detCand = null;
-      return;
+      state.detStreak = 0; state.detCand = null; return;
     }
-
     if (state.detCand === det.code) state.detStreak++;
     else { state.detCand = det.code; state.detStreak = 1; }
-
     var need = det.latin ? 4 : 2;
     if (state.detStreak >= need) applyAutoLang(det.code, 'detected');
-    else flashChip('🔍 Detected ' + (det.name || det.code) + '…');
+    else flashChip('Detected ' + (det.name || det.code) + '…');
   }
 
   function advanceScan() {
     state.scanIdx = (state.scanIdx + 1) % SCAN_LIST.length;
     state.autoLang = SCAN_LIST[state.scanIdx];
     updateLangHint();
-    flashChip('🔍 Scanning: ' + (langName(state.autoLang) || state.autoLang));
+    flashChip('Scanning: ' + (langName(state.autoLang) || state.autoLang));
   }
 
-  /* ============================================================
-     10) Finalize a phrase
-     ============================================================ */
   function finalize(raw) {
     var text = String(raw || '').replace(/\s+/g, ' ').trim();
     if (!text) return;
-
     var end   = elapsed();
     var start = state.lastEnd;
     var prev  = state.segs[state.segs.length - 1];
-
     if (end <= start) end = start + 0.6;
     if (!prev) start = Math.max(0, end - Math.max(0.6, text.length * 0.055));
-
-    var shouldMerge =
-      prev &&
+    var shouldMerge = prev &&
       (start - prev.end) < 0.85 &&
       (prev.text.length + text.length) < 110 &&
       !/[.!?…।。？！]$/.test(prev.text);
-
     var seg;
-
     if (shouldMerge) {
       prev.text = (prev.text + ' ' + text).trim();
       prev.end  = end;
@@ -1220,26 +1277,19 @@
       el.cueList.appendChild(buildRow(seg));
       paintRow(seg);
     }
-
     state.lastEnd = end;
-
     updateEmptyState();
     updateSubs();
     translateSeg(seg);
     analyzeAuto(seg);
     refreshStats();
     refreshButtons();
-
     el.transcript.scrollTop = el.transcript.scrollHeight;
   }
 
-  /* ============================================================
-     11) Recognition lifecycle
-     ============================================================ */
   function handleError(ev) {
     var err = ev && ev.error;
     if (err === 'aborted') return;
-
     if (err === 'no-speech') {
       if (el.lang.value === 'auto' && state.segs.length === 0 && state.active) {
         state.noSpeech++;
@@ -1253,11 +1303,7 @@
       stopAll();
       return;
     }
-    if (err === 'audio-capture') {
-      setStatus('error', 'No microphone');
-      stopAll();
-      return;
-    }
+    if (err === 'audio-capture') { setStatus('error', 'No microphone'); stopAll(); return; }
     if (err === 'network') {
       state.errs++;
       if (state.errs > 6) { setStatus('error', 'Network error — stopped'); stopAll(); }
@@ -1269,63 +1315,43 @@
 
   function spinUp() {
     if (!SR_OK || !state.active) return;
-
     clearTimeout(state.timer);
-
     var rec;
     try { rec = new SR(); } catch (e) { return; }
-
     var myGen = ++state.gen;
     state.rec = rec;
-
     rec.continuous      = true;
     rec.interimResults  = true;
     rec.maxAlternatives = 1;
     rec.lang            = resolveRecogLang();
-
     var seen = (typeof WeakSet !== 'undefined') ? new WeakSet() : null;
 
     rec.onstart = function () {
       if (myGen !== state.gen) return;
-      state.fails = 0;
-      state.errs  = 0;
+      state.fails = 0; state.errs = 0;
       setStatus('listening', 'Listening…');
       el.stage.classList.add('listening');
       el.phText.textContent = 'Listening… speak now';
     };
-
     rec.onresult = function (ev) {
       if (myGen !== state.gen) return;
       state.noSpeech = 0;
       var interim = '';
-
       for (var i = ev.resultIndex; i < ev.results.length; i++) {
         var res = ev.results[i];
         var txt = (res[0] && res[0].transcript) || '';
-
         if (res.isFinal) {
-          if (seen) {
-            if (seen.has(res)) continue;
-            seen.add(res);
-          }
+          if (seen) { if (seen.has(res)) continue; seen.add(res); }
           var clean = String(txt).replace(/\s+/g, ' ').trim();
           if (clean) finalize(clean);
-        } else {
-          interim += txt;
-        }
+        } else interim += txt;
       }
       el.subInterim.textContent = interim;
     };
-
-    rec.onerror = function (ev) {
-      if (myGen !== state.gen) return;
-      handleError(ev);
-    };
-
+    rec.onerror = function (ev) { if (myGen === state.gen) handleError(ev); };
     rec.onend = function () {
       if (myGen !== state.gen) return;
       el.subInterim.textContent = '';
-
       if (!state.active) {
         el.stage.classList.remove('listening');
         setStatus('idle', 'Stopped');
@@ -1334,7 +1360,6 @@
       clearTimeout(state.timer);
       state.timer = setTimeout(spinUp, 280);
     };
-
     try { rec.start(); }
     catch (e) {
       state.fails++;
@@ -1348,29 +1373,20 @@
     if (!state.active) return;
     clearTimeout(state.timer);
     state.gen++;
-    if (state.rec) {
-      try { state.rec.abort(); } catch (e) {}
-      state.rec = null;
-    }
+    if (state.rec) { try { state.rec.abort(); } catch (e) {} state.rec = null; }
     state.timer = setTimeout(spinUp, 220);
   }
 
-  /* ============================================================
-     12) System audio capture
-     ============================================================ */
   function drawMeter() {
     if (!cap.analyser || !cap.data) return;
     cap.analyser.getFloatTimeDomainData(cap.data);
-
     var sum = 0;
     for (var i = 0; i < cap.data.length; i++) sum += cap.data[i] * cap.data[i];
     var rms = Math.sqrt(sum / cap.data.length);
     var db  = 20 * Math.log10(rms || 1e-8);
-
     var pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
     el.meterFill.style.width  = pct.toFixed(1) + '%';
     el.meterLabel.textContent = db > -100 ? db.toFixed(1) + ' dB' : '—';
-
     cap.raf = requestAnimationFrame(drawMeter);
   }
 
@@ -1405,34 +1421,33 @@
       await el.monitor.setSinkId(id || '');
       var opt   = el.outDev.selectedOptions[0];
       var label = (opt && opt.textContent) || 'System default';
-
       if (id && isCableLabel(label)) {
         cap.cableMode = true;
         el.loopWarn.classList.remove('show');
-        el.muteBtn.textContent = '🔊 Cable (silent)';
+        el.muteIcon.className = 'fa-solid fa-volume-high';
+        el.muteLabel.textContent = 'Cable (silent)';
         el.muteBtn.classList.add('live');
         setStatus('listening', 'Loopback → ' + label);
       } else {
         cap.cableMode = false;
         el.muteBtn.classList.remove('live');
-        el.muteBtn.textContent = cap.muted ? '🔇 Muted' : '🔊 Audible';
+        el.muteIcon.className = cap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+        el.muteLabel.textContent = cap.muted ? 'Muted' : 'Audible';
         if (id) setStatus('listening', 'Output: ' + label);
         if (cap.wholeScreen && !cap.muted) el.loopWarn.classList.add('show');
       }
     } catch (err) {
-      console.warn('[applySink] setSinkId failed:', err);
       setStatus('error', 'Cannot route to that device');
     }
   }
 
+  /* ---------- FIXED capture: audio: true (boolean) ---------- */
   async function startSystemCapture() {
     if (cap.stream) return true;
-
     el.sysWarn.classList.remove('show');
     el.loopWarn.classList.remove('show');
     setStatus('', 'Opening capture picker…');
 
-    /* Create AudioContext INSIDE the user gesture so it starts "running". */
     var actx = null;
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
@@ -1440,32 +1455,35 @@
       if (actx.state === 'suspended') actx.resume().catch(function () {});
     } catch (e) { actx = null; }
 
-    /* Single picker. On NotAllowedError we stop — no second prompt. */
     var stream = null;
     try {
       stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { frameRate: 5 },
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl:  false,
-          channelCount: 2
-        }
+        video: true,
+        audio: true,
+        selfBrowserSurface: 'exclude',
+        surfaceSwitching: 'include',
+        systemAudio: 'include'
       });
     } catch (err) {
       try { if (actx) actx.close(); } catch (x) {}
-      var name = err && err.name;
-      if (name === 'NotAllowedError' || name === 'AbortError') {
+      var name = (err && err.name) || 'Error';
+      var msg  = (err && err.message) || '';
+      if (name === 'NotAllowedError' || name === 'AbortError' || name === 'PermissionDeniedError') {
         setStatus('idle', 'Share cancelled');
       } else if (name === 'NotSupportedError') {
-        setStatus('error', 'Capture not supported here');
+        setStatus('error', 'Capture not supported — use Chrome or Edge');
+      } else if (name === 'NotFoundError') {
+        setStatus('error', 'No screen/tab available to share');
+      } else if (name === 'InvalidStateError') {
+        setStatus('error', 'Capture already in progress elsewhere');
+      } else if (name === 'TypeError') {
+        setStatus('error', 'Capture failed: TypeError (browser too old)');
       } else {
-        setStatus('error', 'Capture failed: ' + (name || 'unknown'));
+        setStatus('error', 'Capture failed: ' + name + (msg ? ' — ' + msg.slice(0, 60) : ''));
       }
       return false;
     }
 
-    /* Verify an audio track actually came through. */
     var audioTracks = stream.getAudioTracks().filter(function (t) {
       return t.readyState === 'live';
     });
@@ -1473,20 +1491,27 @@
       stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
       try { if (actx) actx.close(); } catch (e) {}
       el.sysWarn.classList.add('show');
-      setStatus('error', 'No audio — tick "Share tab audio"');
+      setStatus('error', 'No audio — tick "Share tab audio" in the picker');
       return false;
     }
 
-    /* Whole-screen detection (potential loop). */
+    try {
+      audioTracks[0].applyConstraints({
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl:  false
+      }).catch(function () {});
+    } catch (e) {}
+
     var vt = stream.getVideoTracks()[0];
     if (vt) {
       var s = vt.getSettings ? vt.getSettings() : {};
       cap.wholeScreen = s.displaySurface === 'monitor';
+      try { vt.applyConstraints({ frameRate: 5 }).catch(function () {}); } catch (e) {}
     }
 
     var audioOnly = new MediaStream(audioTracks);
 
-    /* Monitor playback. autoplay attribute is on the element; volume/mute set here. */
     el.monitor.srcObject = audioOnly;
     el.monitor.volume    = cap.volume;
     el.monitor.muted     = cap.muted;
@@ -1494,12 +1519,12 @@
 
     try {
       await el.monitor.play();
+      await new Promise(function (r) { setTimeout(r, 120); });
+      if (el.monitor.paused) el.resumeBtn.hidden = false;
     } catch (err) {
-      console.warn('[monitor] play() blocked:', err && err.name);
       el.resumeBtn.hidden = false;
     }
 
-    /* Analyser for the input meter. */
     var analyser = null, data = null;
     if (actx) {
       try {
@@ -1513,7 +1538,6 @@
       } catch (e) { analyser = null; }
     }
 
-    /* Commit state. */
     cap.stream   = stream;
     cap.actx     = actx;
     cap.analyser = analyser;
@@ -1523,46 +1547,49 @@
     if (analyser) drawMeter();
     else el.meterLabel.textContent = 'n/a';
 
-    /* Handle "Stop sharing" from the browser bar. */
     audioTracks[0].addEventListener('ended', function () {
       endCapture();
       if (state.active) stopAll();
     });
 
-    /* Populate devices + route to the current selection. */
     await refreshOutputDevices();
     await applySink();
 
     el.shareBtn.classList.add('live');
-    el.shareBtn.textContent = '✅ Capturing audio';
+    el.shareIcon.className = 'fa-solid fa-circle-check';
+    el.shareLabel.textContent = 'Capturing audio';
     el.stopShareBtn.disabled = false;
 
-    if (cap.wholeScreen && !cap.muted && !cap.cableMode) {
-      el.loopWarn.classList.add('show');
-    }
+    if (cap.wholeScreen && !cap.muted && !cap.cableMode) el.loopWarn.classList.add('show');
 
     setStatus('listening', 'Audio captured');
     updateSourceUI();
+
+    clearTimeout(cap.silenceTimer);
+    cap.silenceTimer = setTimeout(function () {
+      if (!cap.analyser || !cap.data || !state.active) return;
+      cap.analyser.getFloatTimeDomainData(cap.data);
+      var sum = 0;
+      for (var i = 0; i < cap.data.length; i++) sum += cap.data[i] * cap.data[i];
+      var rms = Math.sqrt(sum / cap.data.length);
+      var db  = 20 * Math.log10(rms || 1e-8);
+      if (db < -55) setStatus('error', 'Captured but silent — is the tab playing?');
+    }, 2000);
+
     return true;
   }
 
   function endCapture(silent) {
     cancelAnimationFrame(cap.raf);
     cap.raf = 0;
-
+    clearTimeout(cap.silenceTimer);
     if (cap.stream) {
       cap.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
       cap.stream = null;
     }
-    if (cap.actx) {
-      try { cap.actx.close(); } catch (e) {}
-      cap.actx = null;
-    }
-
-    cap.analyser    = null;
-    cap.data        = null;
-    cap.wholeScreen = false;
-    cap.cableMode   = false;
+    if (cap.actx) { try { cap.actx.close(); } catch (e) {} cap.actx = null; }
+    cap.analyser = null; cap.data = null;
+    cap.wholeScreen = false; cap.cableMode = false;
 
     try { el.monitor.pause(); el.monitor.srcObject = null; } catch (e) {}
 
@@ -1572,18 +1599,17 @@
     el.meterWrap.hidden = true;
     el.stopShareBtn.disabled = true;
     el.shareBtn.classList.remove('live');
-    el.shareBtn.textContent = '🔗 Capture system audio';
+    el.shareIcon.className = 'fa-solid fa-link';
+    el.shareLabel.textContent = 'Capture system audio';
     el.loopWarn.classList.remove('show');
     el.muteBtn.classList.remove('live');
-    el.muteBtn.textContent = cap.muted ? '🔇 Muted' : '🔊 Audible';
+    el.muteIcon.className = cap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+    el.muteLabel.textContent = cap.muted ? 'Muted' : 'Audible';
 
     if (!silent) setStatus('idle', 'Capture stopped');
     updateSourceUI();
   }
 
-  /* ============================================================
-     13) Start / stop
-     ============================================================ */
   function startTicker() {
     stopTicker();
     state.ticker = setInterval(function () {
@@ -1600,34 +1626,24 @@
 
   function beginRecognition() {
     if (!SR_OK || state.active) return;
-
     if (!window.isSecureContext) {
       el.secureWarn.classList.add('show');
       setStatus('error', 'Insecure context');
       return;
     }
-
-    state.active    = true;
-    state.fails     = 0;
-    state.errs      = 0;
-    state.noSpeech  = 0;
-    state.detCand   = null;
-    state.detStreak = 0;
-
+    state.active = true;
+    state.fails = 0; state.errs = 0; state.noSpeech = 0;
+    state.detCand = null; state.detStreak = 0;
     if (el.lang.value === 'auto') {
       state.autoLang = null;
       var idx = SCAN_LIST.indexOf(browserLang());
       state.scanIdx = idx >= 0 ? idx : -1;
-    } else {
-      state.autoLang = null;
-    }
+    } else state.autoLang = null;
     updateLangHint();
-
     var last = state.segs[state.segs.length - 1];
     state.offset  = last ? last.end + 0.3 : 0;
     state.lastEnd = state.offset;
     state.t0      = performance.now();
-
     setStatus('', 'Starting…');
     spinUp();
     startTicker();
@@ -1636,12 +1652,9 @@
 
   function start() {
     if (state.active) return;
-
     if (el.source.value === 'system' && !cap.stream) {
       setStatus('', 'Waiting for audio share…');
-      startSystemCapture().then(function (ok) {
-        if (ok) beginRecognition();
-      });
+      startSystemCapture().then(function (ok) { if (ok) beginRecognition(); });
       return;
     }
     beginRecognition();
@@ -1652,12 +1665,7 @@
     state.gen++;
     clearTimeout(state.timer);
     stopTicker();
-
-    if (state.rec) {
-      try { state.rec.abort(); } catch (e) {}
-      state.rec = null;
-    }
-
+    if (state.rec) { try { state.rec.abort(); } catch (e) {} state.rec = null; }
     el.subInterim.textContent = '';
     el.stage.classList.remove('listening');
     setStatus('idle', 'Stopped');
@@ -1665,12 +1673,7 @@
     refreshButtons();
   }
 
-  /* ============================================================
-     14) Exports
-     ============================================================ */
-  function cueBody(seg) {
-    return seg.text + (seg.tr ? '\n' + seg.tr : '');
-  }
+  function cueBody(seg) { return seg.text + (seg.tr ? '\n' + seg.tr : ''); }
 
   function buildSRT() {
     return '\uFEFF' + state.segs.map(function (s, i) {
@@ -1699,38 +1702,25 @@
     var blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
     var url  = URL.createObjectURL(blob);
     var a    = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
   }
 
-  /* ============================================================
-     15) Events — source & capture
-     ============================================================ */
+  /* ---------- Events ---------- */
   el.source.addEventListener('change', function () {
     try { localStorage.setItem('ac.source', el.source.value); } catch (e) {}
-
     if (el.source.value === 'mic' && cap.stream) endCapture(true);
     updateSourceUI();
-
     if (state.active) {
-      if (el.source.value === 'system' && !cap.stream) {
-        stopAll();
-        start();
-      } else {
-        restartRecognizer();
-      }
+      if (el.source.value === 'system' && !cap.stream) { stopAll(); start(); }
+      else restartRecognizer();
     }
   });
 
   el.shareBtn.addEventListener('click', function () {
     if (cap.stream) endCapture(true);
-    startSystemCapture().then(function (ok) {
-      if (ok && !state.active) beginRecognition();
-    });
+    startSystemCapture().then(function (ok) { if (ok && !state.active) beginRecognition(); });
   });
 
   el.stopShareBtn.addEventListener('click', function () {
@@ -1757,13 +1747,11 @@
   });
 
   el.muteBtn.addEventListener('click', function () {
-    if (cap.cableMode) {
-      setStatus('error', 'Cable mode is always silent');
-      return;
-    }
+    if (cap.cableMode) { setStatus('error', 'Cable mode is always silent'); return; }
     cap.muted = !cap.muted;
     el.monitor.muted = cap.muted;
-    el.muteBtn.textContent = cap.muted ? '🔇 Muted' : '🔊 Audible';
+    el.muteIcon.className = cap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+    el.muteLabel.textContent = cap.muted ? 'Muted' : 'Audible';
     el.muteBtn.classList.toggle('live', cap.muted);
     if (cap.muted) el.loopWarn.classList.remove('show');
     else if (cap.wholeScreen && cap.stream && !cap.cableMode) el.loopWarn.classList.add('show');
@@ -1771,33 +1759,19 @@
 
   el.outDev.addEventListener('change', function () { applySink(); });
 
-  /* ============================================================
-     16) Events — controls
-     ============================================================ */
   el.startBtn.addEventListener('click', start);
   el.stopBtn.addEventListener('click', function () { if (state.active) stopAll(); });
 
   el.clearBtn.addEventListener('click', function () {
     stopAll();
-
-    state.segs      = [];
-    state.offset    = 0;
-    state.lastEnd   = 0;
-    state.autoLang  = null;
-    state.detCand   = null;
-    state.detStreak = 0;
-
+    state.segs = []; state.offset = 0; state.lastEnd = 0;
+    state.autoLang = null; state.detCand = null; state.detStreak = 0;
     el.cueList.innerHTML = '';
     el.subFinal.textContent = 'Press “Start listening” and begin speaking…';
     el.subFinal.classList.add('placeholder');
-    el.subTrans.textContent = '';
-    el.subTrans.hidden = true;
+    el.subTrans.textContent = ''; el.subTrans.hidden = true;
     el.subInterim.textContent = '';
-
-    updateEmptyState();
-    updateLangHint();
-    refreshStats();
-    refreshButtons();
+    updateEmptyState(); updateLangHint(); refreshStats(); refreshButtons();
   });
 
   el.srtBtn.addEventListener('click', function () {
@@ -1820,22 +1794,18 @@
     var text = state.segs.map(function (s) {
       return s.text + (s.tr ? '\n' + s.tr : '');
     }).join('\n');
-
     var done = function () {
-      var old = el.copyBtn.textContent;
-      el.copyBtn.textContent = '✓ Copied!';
-      setTimeout(function () { el.copyBtn.textContent = old; }, 1400);
+      var old = el.copyBtn.innerHTML;
+      el.copyBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>Copied!</span>';
+      setTimeout(function () { el.copyBtn.innerHTML = old; }, 1400);
     };
-
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(done).catch(function () {});
     } else {
       var ta = document.createElement('textarea');
       ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
       try { document.execCommand('copy'); done(); } catch (e) {}
       ta.remove();
     }
@@ -1843,24 +1813,17 @@
 
   el.chip.addEventListener('click', function () {
     if (el.lang.value !== 'auto') return;
-    state.autoLang  = null;
-    state.scanIdx   = -1;
-    state.detCand   = null;
-    state.detStreak = 0;
+    state.autoLang = null; state.scanIdx = -1;
+    state.detCand = null; state.detStreak = 0;
     updateLangHint();
-    flashChip('🌐 Reset to browser language');
+    flashChip('Reset to browser language');
     restartRecognizer();
   });
 
   el.lang.addEventListener('change', function () {
     try { localStorage.setItem('ac.lang', el.lang.value); } catch (e) {}
-
-    state.autoLang  = null;
-    state.scanIdx   = -1;
-    state.detCand   = null;
-    state.detStreak = 0;
-    state.noSpeech  = 0;
-
+    state.autoLang = null; state.scanIdx = -1;
+    state.detCand = null; state.detStreak = 0; state.noSpeech = 0;
     if (el.lang.value === 'auto') {
       var idx = SCAN_LIST.indexOf(browserLang());
       state.scanIdx = idx >= 0 ? idx : -1;
@@ -1872,7 +1835,6 @@
   el.trLang.addEventListener('change', function () {
     state.trOn = !!el.trLang.value;
     try { localStorage.setItem('ac.trLang', el.trLang.value); } catch (e) {}
-
     if (!state.trOn) {
       state.segs.forEach(function (s) { s.tr = ''; paintRow(s); });
       updateSubs();
@@ -1897,16 +1859,16 @@
   });
 
   document.addEventListener('fullscreenchange', function () {
+    el.fsIcon.className = document.fullscreenElement
+      ? 'fa-solid fa-compress'
+      : 'fa-solid fa-expand';
     el.fsBtn.title = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
   });
 
-  /* ============================================================
-     17) Optional media file
-     ============================================================ */
+  /* ---------- Optional media file ---------- */
   function loadMedia(file) {
     if (!file) return;
     if (!/^(audio|video)\//.test(file.type)) return;
-
     if (el.player.src) URL.revokeObjectURL(el.player.src);
     el.player.src = URL.createObjectURL(file);
     el.player.hidden = false;
@@ -1946,9 +1908,6 @@
     if (f) loadMedia(f);
   });
 
-  /* ============================================================
-     18) Follow page language when translation is "Auto"
-     ============================================================ */
   var lastPageLang = pageTargetLang();
   setInterval(function () {
     if (el.trLang.value !== 'auto') return;
@@ -1959,9 +1918,6 @@
     }
   }, 1600);
 
-  /* ============================================================
-     19) Cleanup
-     ============================================================ */
   window.addEventListener('beforeunload', function () {
     state.active = false;
     state.gen++;
@@ -1972,13 +1928,9 @@
     if (el.player.src) URL.revokeObjectURL(el.player.src);
   });
 
-  /* ============================================================
-     20) Init
-     ============================================================ */
   try {
     var savedSource = localStorage.getItem('ac.source');
     if (savedSource === 'system' || savedSource === 'mic') el.source.value = savedSource;
-
     var savedLang = localStorage.getItem('ac.lang');
     if (savedLang !== null && el.lang.querySelector('option[value="' + savedLang + '"]')) {
       el.lang.value = savedLang;
