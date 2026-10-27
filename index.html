@@ -5,57 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="color-scheme" content="dark" />
 <meta name="theme-color" content="#0d1117" />
-<title>Auto Captions · System Audio · Auto Detect · SRT/VTT (No API Key)</title>
-<meta name="description" content="Browser-only live captions with system/tab audio capture, auto language detection, caption translation and SRT/VTT export. No API key required." />
+<title>Auto Captions · Live + Whisper · SRT/VTT/ASS (No API)</title>
+<meta name="description" content="Live mic captions + in-browser Whisper for video/audio → SRT/VTT/ASS. No server, no API key." />
 
-<!-- ============================================================
-     FORCED DARK MODE — enforced by JavaScript only.
-     Runs before the CSS paints so no light-mode flash can occur.
-     ============================================================ -->
-<script>
-(function forceDarkMode() {
-  try {
-    var html = document.documentElement;
-
-    /* 1) Force browser-native UI (scrollbars, <select>, <input type=file>,
-          date pickers, form controls) into dark mode. */
-    html.style.colorScheme = 'dark';
-
-    /* 2) Stamp theme markers so any third-party CSS can key off them. */
-    html.setAttribute('data-theme', 'dark');
-    html.setAttribute('data-bs-theme', 'dark');
-
-    /* 3) Keep <meta name="theme-color"> in sync (mobile browser chrome). */
-    var meta = document.querySelector('meta[name="theme-color"]');
-    if (!meta) {
-      meta = document.createElement('meta');
-      meta.name = 'theme-color';
-      document.head.appendChild(meta);
-    }
-    meta.content = '#0d1117';
-
-    /* 4) Override prefers-color-scheme so any library CSS that still
-          branches on "(prefers-color-scheme: light)" is forced to false.
-          We do NOT touch "(prefers-color-scheme: dark)". */
-    var nativeMM = window.matchMedia.bind(window);
-    window.matchMedia = function (q) {
-      if (typeof q === 'string' && /prefers-color-scheme\s*:\s*light/i.test(q)) {
-        return nativeMM('(prefers-color-scheme: dark)');
-      }
-      return nativeMM(q);
-    };
-
-    /* 5) Lock the background colour on <html> immediately so even before
-          the main stylesheet loads there is no white flash. */
-    html.style.background = '#0d1117';
-    html.style.color = '#e6edf3';
-  } catch (e) {
-    /* Non-fatal — CSS alone still renders dark. */
-  }
-})();
-</script>
-
-<!-- FontAwesome 6 (free) -->
 <link rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
       crossorigin="anonymous" referrerpolicy="no-referrer" />
@@ -65,6 +17,7 @@
     --bg:#0d1117; --panel:#161b22; --border:#30363d;
     --text:#e6edf3; --muted:#8b949e;
     --accent:#2f81f7; --green:#3fb950; --red:#f85149; --amber:#d29922;
+    --pop:#FFB117;
     --radius:14px;
   }
   *{box-sizing:border-box}
@@ -80,7 +33,6 @@
     -webkit-font-smoothing:antialiased;
   }
 
-  /* ---------- Header ---------- */
   .topbar{
     max-width:1080px;margin:0 auto;padding:22px 20px 6px;
     display:flex;align-items:center;justify-content:space-between;
@@ -94,25 +46,13 @@
     box-shadow:0 8px 22px rgba(47,129,247,.35);
   }
   .logo i{font-size:24px;color:#fff}
-  .brand h1{
-    margin:0;font-size:19px;letter-spacing:-.2px;
-    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
-  }
+  .brand h1{margin:0;font-size:19px;letter-spacing:-.2px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .brand .sub{margin:3px 0 0;font-size:12.5px;color:var(--muted)}
   .badge{
     font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
     padding:3px 8px;border-radius:999px;color:#7ee787;
     background:rgba(63,185,80,.12);border:1px solid rgba(63,185,80,.35);
   }
-  .topbar-right{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .gtranslate_wrapper{min-width:180px;display:flex;justify-content:flex-end;align-items:center}
-  .gt-fallback{
-    font-size:13px;color:#79c0ff;text-decoration:none;
-    border:1px solid var(--border);border-radius:9px;padding:7px 12px;background:#0d1117;
-  }
-  .gt-fallback:hover{border-color:var(--accent)}
-
-  /* JS-forced dark badge */
   .theme-lock{
     display:inline-flex;align-items:center;gap:6px;
     padding:5px 10px;border-radius:999px;
@@ -121,23 +61,33 @@
     border:1px solid rgba(210,153,34,.4);
     color:#ffd8a8;white-space:nowrap;
   }
-  .theme-lock i{font-size:10px}
 
-  /* ---------- Layout ---------- */
   .wrap{max-width:1080px;margin:0 auto;padding:12px 20px 70px}
+
+  /* tabs */
+  .tabs{
+    display:flex;gap:6px;margin-bottom:18px;
+    border-bottom:1px solid var(--border);padding-bottom:0;
+  }
+  .tab{
+    background:none;border:none;color:var(--muted);
+    padding:12px 18px;font-size:14px;font-weight:700;cursor:pointer;
+    border-bottom:3px solid transparent;transition:color .15s,border-color .15s;
+    font-family:inherit;
+  }
+  .tab:hover{color:var(--text)}
+  .tab.active{color:#79c0ff;border-bottom-color:var(--accent)}
+
   .card{
     background:linear-gradient(180deg,#161b22,#12161d);
     border:1px solid var(--border);border-radius:var(--radius);
     padding:18px;margin-bottom:18px;
     box-shadow:0 14px 34px rgba(0,0,0,.38);
   }
-  .card h2{
-    margin:0 0 4px;font-size:13.5px;text-transform:uppercase;
-    letter-spacing:.8px;color:var(--muted);font-weight:700;
-  }
+  .card h2{margin:0 0 4px;font-size:13.5px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);font-weight:700;}
   .card .desc{margin:0 0 14px;font-size:13px;color:var(--muted);line-height:1.55}
 
-  /* ---------- Stage ---------- */
+  /* stage */
   .stage{
     position:relative;width:100%;aspect-ratio:16/9;
     background:#05070a;border:1px solid var(--border);border-radius:12px;
@@ -172,10 +122,7 @@
   .stage.listening .bars i:nth-child(3){animation-delay:.24s}
   .stage.listening .bars i:nth-child(4){animation-delay:.36s}
   .stage.listening .bars i:nth-child(5){animation-delay:.48s}
-  .stage.listening .stage-placeholder .icon{
-    border-color:rgba(63,185,80,.7);
-    background:rgba(63,185,80,.06);
-  }
+  .stage.listening .stage-placeholder .icon{border-color:rgba(63,185,80,.7);background:rgba(63,185,80,.06);}
   @keyframes bounce{0%,100%{height:8px}50%{height:40px}}
 
   .fs-btn{
@@ -189,24 +136,6 @@
   .fs-btn:hover{background:rgba(48,54,61,.95);border-color:#8b949e}
   .fs-btn i{font-size:15px}
 
-  .resume-audio{
-    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-    z-index:20;padding:14px 24px;
-    background:linear-gradient(180deg,#2f81f7,#1f6feb);color:#fff;
-    border:0;border-radius:12px;font-weight:700;font-size:14px;
-    cursor:pointer;box-shadow:0 10px 30px rgba(47,129,247,.5);
-    font-family:inherit;
-    display:inline-flex;align-items:center;gap:10px;
-    animation:pulse-scale 2s infinite;
-  }
-  .resume-audio[hidden]{display:none}
-  .resume-audio i{font-size:16px}
-  @keyframes pulse-scale{
-    0%,100%{transform:translate(-50%,-50%) scale(1)}
-    50%{transform:translate(-50%,-50%) scale(1.05)}
-  }
-
-  /* ---------- Subtitle overlay ---------- */
   .subs{
     position:absolute;left:0;right:0;bottom:0;
     padding:80px 24px 26px;
@@ -217,64 +146,46 @@
   }
   .sub-line{
     display:block;
-    font-size:clamp(17px,3.2vw,30px);
-    line-height:1.35;font-weight:800;letter-spacing:-.2px;color:#fff;
+    font-size:clamp(17px,3.2vw,30px);line-height:1.35;font-weight:800;letter-spacing:-.2px;color:#fff;
     text-shadow:0 2px 12px rgba(0,0,0,.98), 0 0 4px rgba(0,0,0,.9);
     word-break:break-word;transition:opacity .15s;
   }
-  .sub-line[hidden]{display:none}
-  .sub-line.interim{
-    font-weight:500;font-style:italic;color:#c9d1d9;
-    text-shadow:0 2px 8px rgba(0,0,0,.9);min-height:1px;
-  }
-  .sub-line.placeholder{
-    font-weight:500;font-style:normal;color:#6e7681;
-    font-size:clamp(14px,2.1vw,18px);text-shadow:none;
-  }
-  .sub-line.trans{
-    font-size:clamp(14px,2.4vw,22px);font-weight:600;color:#79c0ff;
-    text-shadow:0 2px 10px rgba(0,0,0,.95);
-  }
+  .sub-line.interim{font-weight:500;font-style:italic;color:#c9d1d9;text-shadow:0 2px 8px rgba(0,0,0,.9);min-height:1px;}
+  .sub-line.placeholder{font-weight:500;font-style:normal;color:#6e7681;font-size:clamp(14px,2.1vw,18px);text-shadow:none;}
+  .sub-line.trans{font-size:clamp(14px,2.4vw,22px);font-weight:600;color:#79c0ff;text-shadow:0 2px 10px rgba(0,0,0,.95);}
 
-  /* ---------- Controls ---------- */
+  /* rows */
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}
   .row + .row{margin-top:14px}
   .field{display:flex;flex-direction:column;gap:6px}
-  .field > span{
-    font-size:11.5px;font-weight:700;letter-spacing:.5px;
-    text-transform:uppercase;color:var(--muted);
-  }
-  select, input[type="file"]{
+  .field > span{font-size:11.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);}
+
+  select, input[type="file"], input[type="text"], input[type="number"], input[type="color"]{
     background:#0d1117;color:var(--text);border:1px solid var(--border);
-    border-radius:10px;padding:9px 12px;font-size:14px;outline:none;min-width:230px;
-    font-family:inherit;
+    border-radius:10px;padding:9px 12px;font-size:14px;outline:none;font-family:inherit;
+    min-width:160px;
   }
-  select:focus, input[type="file"]:focus{
-    border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,129,247,.22);
-  }
+  select:focus, input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(47,129,247,.22);}
   input[type="file"]{padding:7px 10px;font-size:13px;cursor:pointer}
   input[type="file"]::file-selector-button{
     background:#21262d;color:var(--text);border:1px solid var(--border);
-    border-radius:8px;padding:6px 12px;margin-right:10px;cursor:pointer;font-weight:600;
-    font-family:inherit;
+    border-radius:8px;padding:6px 12px;margin-right:10px;cursor:pointer;font-weight:600;font-family:inherit;
   }
+  input[type="color"]{padding:3px;width:50px;height:38px;cursor:pointer;min-width:50px;}
+  input[type="number"]{min-width:80px;max-width:120px}
 
+  /* buttons */
   .btn{
     appearance:none;border:1px solid var(--border);background:#21262d;color:var(--text);
     padding:10px 16px;border-radius:10px;font-size:13.5px;font-weight:650;cursor:pointer;
     transition:background .15s,border-color .15s,transform .08s,filter .15s;
-    display:inline-flex;align-items:center;gap:8px;white-space:nowrap;
-    font-family:inherit;
+    display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-family:inherit;
   }
   .btn i{font-size:13.5px;line-height:1}
   .btn:hover:not(:disabled){background:#30363d;border-color:#8b949e}
   .btn:active:not(:disabled){transform:translateY(1px)}
   .btn:disabled{opacity:.4;cursor:not-allowed}
-  .btn.primary{
-    background:linear-gradient(180deg,#2f81f7,#1f6feb);
-    border-color:#1f6feb;color:#fff;
-    box-shadow:0 6px 18px rgba(47,129,247,.28);
-  }
+  .btn.primary{background:linear-gradient(180deg,#2f81f7,#1f6feb);border-color:#1f6feb;color:#fff;box-shadow:0 6px 18px rgba(47,129,247,.28);}
   .btn.primary:hover:not(:disabled){filter:brightness(1.12)}
   .btn.stop{background:linear-gradient(180deg,#f85149,#da3633);border-color:#da3633;color:#fff}
   .btn.stop:hover:not(:disabled){filter:brightness(1.1)}
@@ -282,87 +193,48 @@
   .btn.live{border-color:rgba(63,185,80,.55);color:#7ee787;background:rgba(63,185,80,.1)}
   .btn.live:hover:not(:disabled){background:rgba(63,185,80,.18);border-color:var(--green)}
 
+  /* status */
   .status{
-    display:inline-flex;align-items:center;gap:8px;
-    padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:650;
-    background:#0d1117;border:1px solid var(--border);color:var(--muted);
-    min-height:38px;
+    display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;
+    font-size:12.5px;font-weight:650;background:#0d1117;border:1px solid var(--border);
+    color:var(--muted);min-height:38px;
   }
-  .dot{
-    font-size:8px;flex:0 0 8px;
-    color:#484f58;line-height:1;display:inline-block;
-    transition:color .2s;
-  }
+  .dot{font-size:8px;flex:0 0 8px;color:#484f58;line-height:1;display:inline-block;transition:color .2s;}
   .status.listening{color:#7ee787;border-color:rgba(63,185,80,.45);background:rgba(63,185,80,.08)}
   .status.listening .dot{color:var(--green);animation:pulse 1.15s infinite}
   .status.error{color:#ff7b72;border-color:rgba(248,81,73,.45);background:rgba(248,81,73,.08)}
   .status.error .dot{color:var(--red)}
-  @keyframes pulse{
-    0%{box-shadow:0 0 0 0 rgba(63,185,80,.55)}
-    70%{box-shadow:0 0 0 9px rgba(63,185,80,0)}
-    100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}
-  }
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,185,80,.55)}70%{box-shadow:0 0 0 9px rgba(63,185,80,0)}100%{box-shadow:0 0 0 0 rgba(63,185,80,0)}}
 
+  /* chip */
   .chip{
-    display:inline-flex;align-items:center;gap:8px;
-    padding:7px 13px;border-radius:999px;font-size:12.5px;font-weight:650;
-    background:rgba(47,129,247,.12);border:1px solid rgba(47,129,247,.45);
-    color:#79c0ff;cursor:pointer;min-height:38px;font-family:inherit;
-    transition:background .15s,border-color .15s;
-    max-width:100%;
+    display:inline-flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;
+    font-size:12.5px;font-weight:650;background:rgba(47,129,247,.12);border:1px solid rgba(47,129,247,.45);
+    color:#79c0ff;cursor:pointer;min-height:38px;font-family:inherit;transition:background .15s,border-color .15s;max-width:100%;
   }
-  .chip i{font-size:12px}
   .chip:hover{background:rgba(47,129,247,.2);border-color:var(--accent)}
   .chip[hidden]{display:none}
   .chip.busy{background:rgba(210,153,34,.14);border-color:rgba(210,153,34,.5);color:#ffd8a8}
 
-  /* ---------- Audio meter ---------- */
-  .meter-wrap{
-    display:flex;align-items:center;gap:12px;margin-top:14px;
-  }
+  /* meter */
+  .meter-wrap{display:flex;align-items:center;gap:12px;margin-top:14px}
   .meter-wrap[hidden]{display:none}
-  .meter{
-    flex:1 1 auto;height:12px;border-radius:999px;overflow:hidden;
-    background:#0b0f14;border:1px solid var(--border);position:relative;
-  }
-  .meter-fill{
-    height:100%;width:0%;border-radius:999px;
-    background:linear-gradient(90deg,#3fb950,#d29922 68%,#f85149);
-    transition:width .06s linear;
-  }
-  .meter-label{
-    flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    font-size:11.5px;color:var(--muted);min-width:64px;text-align:right;
-  }
-  .meter-wrap .src-tag{
-    flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.5px;
-    text-transform:uppercase;color:#7ee787;
-    display:inline-flex;align-items:center;gap:5px;
-  }
-  .meter-wrap .src-tag i{font-size:11px}
+  .meter{flex:1 1 auto;height:12px;border-radius:999px;overflow:hidden;background:#0b0f14;border:1px solid var(--border);position:relative}
+  .meter-fill{height:100%;width:0%;border-radius:999px;background:linear-gradient(90deg,#3fb950,#d29922 68%,#f85149);transition:width .06s linear}
+  .meter-label{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--muted);min-width:64px;text-align:right}
+  .meter-wrap .src-tag{flex:0 0 auto;font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#7ee787;display:inline-flex;align-items:center;gap:5px}
 
-  /* ---------- Transcript ---------- */
+  /* transcript */
   .transcript{
     margin-top:14px;max-height:320px;overflow-y:auto;
-    border:1px solid var(--border);border-radius:12px;
-    background:#0b0f14;padding:8px;
+    border:1px solid var(--border);border-radius:12px;background:#0b0f14;padding:8px;
   }
   .transcript::-webkit-scrollbar{width:10px}
   .transcript::-webkit-scrollbar-thumb{background:#30363d;border-radius:8px;border:2px solid #0b0f14}
-  .seg{
-    display:flex;gap:12px;padding:9px 11px;border-radius:9px;
-    font-size:14.5px;line-height:1.5;align-items:flex-start;
-  }
+  .seg{display:flex;gap:12px;padding:9px 11px;border-radius:9px;font-size:14.5px;line-height:1.5;align-items:flex-start}
   .seg:nth-child(odd){background:rgba(255,255,255,.022)}
-  .seg-time{
-    flex:0 0 auto;
-    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
-    font-size:11.5px;color:var(--accent);padding-top:3px;
-    white-space:nowrap;letter-spacing:-.2px;
-  }
+  .seg-time{flex:0 0 auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11.5px;color:var(--accent);padding-top:3px;white-space:nowrap;letter-spacing:-.2px}
   .seg-text{flex:1 1 auto;word-break:break-word;display:flex;flex-direction:column;gap:2px}
-  .seg-tr{color:#79c0ff;font-size:13px;opacity:.95}
-  .seg-tr[hidden]{display:none}
   .empty{color:#565f6b;font-size:13.5px;padding:22px 12px;text-align:center}
 
   .meta{display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:12px}
@@ -370,18 +242,11 @@
   .meta i{font-size:11px;margin-right:4px;opacity:.7}
 
   .hint{margin:12px 0 0;font-size:12.5px;line-height:1.6;color:var(--muted)}
-  .hint code{
-    background:#0d1117;border:1px solid var(--border);border-radius:5px;
-    padding:1px 6px;font-size:12px;color:#79c0ff;
-  }
+  .hint code{background:#0d1117;border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12px;color:#79c0ff}
   .hint strong{color:#c9d1d9}
   .hint ol{margin:8px 0 0;padding-left:20px}
   .hint li{margin-bottom:8px}
-  .hint kbd{
-    display:inline-block;padding:1px 5px;border-radius:4px;
-    background:#21262d;border:1px solid var(--border);
-    font-family:ui-monospace,monospace;font-size:11px;
-  }
+  .hint kbd{display:inline-block;padding:1px 5px;border-radius:4px;background:#21262d;border:1px solid var(--border);font-family:ui-monospace,monospace;font-size:11px}
 
   .warnbox{
     display:none;margin-bottom:18px;padding:13px 16px;border-radius:12px;
@@ -392,48 +257,119 @@
   .warnbox i{margin-right:6px}
   .warnbox code{background:rgba(0,0,0,.35);border-radius:4px;padding:1px 5px}
 
+  /* vol slider */
   .vol-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  input[type="range"]{
-    -webkit-appearance:none;appearance:none;height:6px;border-radius:999px;
-    background:#21262d;outline:none;width:130px;cursor:pointer;
+  input[type="range"]{-webkit-appearance:none;appearance:none;height:6px;border-radius:999px;background:#21262d;outline:none;width:130px;cursor:pointer}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #0d1117;cursor:pointer}
+  input[type="range"]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);border:2px solid #0d1117;cursor:pointer}
+
+  /* drop zone */
+  .drop-zone{
+    border:2px dashed var(--border);border-radius:12px;padding:40px 20px;
+    text-align:center;cursor:pointer;transition:border-color .15s,background .15s;
+    color:var(--muted);
   }
-  input[type="range"]::-webkit-slider-thumb{
-    -webkit-appearance:none;appearance:none;width:16px;height:16px;border-radius:50%;
-    background:var(--accent);border:2px solid #0d1117;cursor:pointer;
+  .drop-zone:hover, .drop-zone.drag{border-color:var(--accent);background:rgba(47,129,247,.05);color:var(--text);}
+  .drop-zone i{font-size:32px;margin-bottom:10px;display:block}
+  .drop-zone p{margin:0;font-size:13.5px}
+
+  /* progress */
+  .progress-track{
+    height:8px;background:#0b0f14;border:1px solid var(--border);border-radius:999px;
+    overflow:hidden;margin-top:14px;
   }
-  input[type="range"]::-moz-range-thumb{
-    width:16px;height:16px;border-radius:50%;background:var(--accent);
-    border:2px solid #0d1117;cursor:pointer;
+  .progress-fill{
+    height:100%;width:0%;background:linear-gradient(90deg,#2f81f7,#3fb950);
+    transition:width .2s ease;
   }
 
-  footer{
-    max-width:1080px;margin:0 auto;padding:0 20px 40px;
-    color:#565f6b;font-size:12px;line-height:1.6;
+  /* karaoke overlay */
+  .stage.karaoke{aspect-ratio:16/9}
+  .stage.karaoke video{width:100%;height:100%;object-fit:contain;background:#000}
+  .karaoke-layer{
+    position:absolute;left:0;right:0;bottom:8%;
+    text-align:center;pointer-events:none;padding:0 5%;
+    font-family:'Montserrat',Arial,sans-serif;font-weight:900;
+    z-index:10;
   }
+  .karaoke-line{display:inline-block;max-width:100%;letter-spacing:-0.5px;line-height:1.15}
+  .kw{
+    color:#fff;
+    -webkit-text-stroke:3px #000;
+    paint-order:stroke fill;
+    text-shadow:
+      -2px -2px 0 #000, 2px -2px 0 #000,
+      -2px 2px 0 #000, 2px 2px 0 #000,
+      0 3px 10px rgba(0,0,0,.85);
+    transition:color .05s;
+    text-transform:uppercase;
+    display:inline-block;
+  }
+  .kw.active{
+    color:var(--pop);
+    -webkit-text-stroke:5px #000;
+    animation:kpop .2s ease-out;
+  }
+  @keyframes kpop{
+    0%{-webkit-text-stroke:8px #000;filter:blur(.8px);transform:scale(1.05)}
+    100%{-webkit-text-stroke:5px #000;filter:none;transform:scale(1)}
+  }
+
+  /* ass opts collapse */
+  details.assopts summary{
+    cursor:pointer;font-size:13px;color:#79c0ff;padding:6px 0;user-select:none;
+  }
+  details.assopts summary:hover{color:var(--accent)}
+  details.assopts[open] summary{margin-bottom:14px}
+
+  footer{max-width:1080px;margin:0 auto;padding:0 20px 40px;color:#565f6b;font-size:12px;line-height:1.6}
+
   @media (max-width:620px){
     .brand h1{font-size:17px}
-    select, input[type="file"]{min-width:170px}
+    select, input[type="file"]{min-width:150px}
     .subs{padding:60px 14px 18px}
-    .topbar-right{width:100%;justify-content:space-between}
+    .tab{padding:10px 12px;font-size:13px}
+    .karaoke-line{font-size:14px !important}
   }
 </style>
 </head>
 <body>
+
+<script>
+(function forceDarkMode() {
+  try {
+    var html = document.documentElement;
+    html.style.colorScheme = 'dark';
+    html.setAttribute('data-theme', 'dark');
+    html.setAttribute('data-bs-theme', 'dark');
+    var meta = document.querySelector('meta[name="theme-color"]');
+    if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
+    meta.content = '#0d1117';
+    var nativeMM = window.matchMedia.bind(window);
+    window.matchMedia = function (q) {
+      if (typeof q === 'string' && /prefers-color-scheme\s*:\s*light/i.test(q)) {
+        return nativeMM('(prefers-color-scheme: dark)');
+      }
+      return nativeMM(q);
+    };
+    html.style.background = '#0d1117';
+    html.style.color = '#e6edf3';
+  } catch (e) {}
+})();
+</script>
 
 <header class="topbar">
   <div class="brand">
     <div class="logo"><i class="fa-solid fa-closed-captioning"></i></div>
     <div>
       <h1>Auto Captions <span class="badge">No API Key</span></h1>
-      <p class="sub">System audio listener · auto language detect · SRT / VTT export</p>
+      <p class="sub">Live mic + in-browser Whisper · SRT / VTT / ASS export</p>
     </div>
   </div>
   <div class="topbar-right">
-    <div class="theme-lock" title="Dark mode is enforced by JavaScript">
-      <i class="fa-solid fa-lock"></i>
-      <span>Dark · JS</span>
+    <div class="theme-lock" title="Dark mode forced by JavaScript">
+      <i class="fa-solid fa-lock"></i><span>Dark · JS</span>
     </div>
-    <div class="gtranslate_wrapper" id="gtWrapper"></div>
   </div>
 </header>
 
@@ -443,7 +379,6 @@
     <i class="fa-solid fa-triangle-exclamation"></i>
     <strong>Browser not supported.</strong> This tool uses the Web Speech API.
     Open it in <b>Google Chrome</b>, <b>Microsoft Edge</b> or <b>Safari</b>.
-    (Firefox has not implemented <code>SpeechRecognition</code> yet.)
   </div>
 
   <div id="secureWarn" class="warnbox">
@@ -457,8 +392,7 @@
     <i class="fa-solid fa-volume-xmark"></i>
     <strong>No audio track was shared.</strong> In the Chrome/Edge picker, tick
     <code>Share tab audio</code> (tab) or <code>Share system audio</code> (screen)
-    before clicking <b>Share</b>. If your OS/browser doesn't offer it, use the
-    virtual-cable method described below.
+    before clicking <b>Share</b>.
   </div>
 
   <div id="loopWarn" class="warnbox">
@@ -466,326 +400,402 @@
     <strong>Possible echo loop.</strong> You're capturing <em>entire screen</em> audio
     while monitoring through speakers — the monitor playback gets re-captured and echoes.
     Fix: capture a <b>single Chrome tab</b> instead, or send the monitor to a
-    <b>virtual cable</b> (see the setup guide below).
+    <b>virtual cable</b>.
   </div>
 
-  <!-- STAGE -->
-  <section class="card">
-    <h2>Subtitle stage</h2>
-    <p class="desc">Live subtitles render here. Feed it your microphone, or capture system / tab audio below.</p>
+  <!-- TABS -->
+  <div class="tabs" id="tabs">
+    <button class="tab active" data-tab="live"><i class="fa-solid fa-microphone"></i> Live mic / system audio</button>
+    <button class="tab" data-tab="file"><i class="fa-solid fa-film"></i> File → Whisper captions</button>
+  </div>
 
-    <div class="stage" id="stage">
-      <div class="stage-placeholder" id="stagePlaceholder">
-        <div class="icon"><i class="fa-solid fa-microphone"></i></div>
-        <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
-        <span id="phText">Press “Start listening” and begin speaking…</span>
+  <!-- ======================= LIVE PANEL ======================= -->
+  <div id="livePanel">
+
+    <section class="card">
+      <h2>Subtitle stage</h2>
+      <p class="desc">Live subtitles render here. Feed it your microphone, or capture system / tab audio below.</p>
+      <div class="stage" id="stage">
+        <div class="stage-placeholder" id="stagePlaceholder">
+          <div class="icon"><i class="fa-solid fa-microphone"></i></div>
+          <div class="bars"><i></i><i></i><i></i><i></i><i></i></div>
+          <span id="phText">Press “Start listening” and begin speaking…</span>
+        </div>
+        <video id="player" controls playsinline preload="metadata" hidden></video>
+        <button class="fs-btn" id="fsBtn" type="button" title="Fullscreen" aria-label="Toggle fullscreen">
+          <i id="fsIcon" class="fa-solid fa-expand"></i>
+        </button>
+        <button class="resume-audio" id="resumeAudioBtn" type="button" hidden
+                style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:20;padding:14px 24px;background:linear-gradient(180deg,#2f81f7,#1f6feb);color:#fff;border:0;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 10px 30px rgba(47,129,247,.5);font-family:inherit;display:inline-flex;align-items:center;gap:10px;">
+          <i class="fa-solid fa-volume-high"></i><span>Click to enable audio playback</span>
+        </button>
+        <div class="subs" id="subs">
+          <span class="sub-line placeholder" id="subFinal">Press “Start listening” and begin speaking…</span>
+          <span class="sub-line trans" id="subTrans" hidden></span>
+          <span class="sub-line interim" id="subInterim"></span>
+        </div>
       </div>
+    </section>
 
-      <video id="player" controls playsinline preload="metadata" hidden></video>
+    <section class="card">
+      <h2>Input source &amp; controls</h2>
+      <p class="desc">
+        <b>Microphone</b> transcribes the OS default input.
+        <b>System / tab audio</b> captures internal sound, then <em>monitors</em> it out
+        loud (or into a virtual cable) so the recogniser can hear it.
+      </p>
 
-      <button class="fs-btn" id="fsBtn" type="button" title="Fullscreen" aria-label="Toggle fullscreen">
-        <i id="fsIcon" class="fa-solid fa-expand"></i>
-      </button>
-
-      <button class="resume-audio" id="resumeAudioBtn" type="button" hidden>
-        <i class="fa-solid fa-volume-high"></i>
-        <span>Click to enable audio playback</span>
-      </button>
-
-      <div class="subs" id="subs">
-        <span class="sub-line placeholder" id="subFinal">Press “Start listening” and begin speaking…</span>
-        <span class="sub-line trans" id="subTrans" hidden></span>
-        <span class="sub-line interim" id="subInterim"></span>
-      </div>
-    </div>
-  </section>
-
-  <!-- CONTROLS -->
-  <section class="card">
-    <h2>Input source &amp; controls</h2>
-    <p class="desc">
-      <b>Microphone</b> transcribes the OS default input.
-      <b>System / tab audio</b> captures internal sound, then <em>monitors</em> it out
-      loud (or into a virtual cable) so the recogniser can hear it.
-    </p>
-
-    <div class="row">
-      <label class="field">
-        <span>Input source</span>
-        <select id="source">
-          <option value="mic" selected>🎤 Microphone (default input)</option>
-          <option value="system">🔊 System / tab audio (internal listener)</option>
-        </select>
-      </label>
-
-      <div class="field" id="shareField" hidden>
-        <span>Audio capture</span>
-        <button id="shareBtn" class="btn" type="button">
-          <i id="shareIcon" class="fa-solid fa-link"></i>
-          <span id="shareLabel">Capture system audio</span>
+      <div class="row">
+        <label class="field">
+          <span>Input source</span>
+          <select id="source">
+            <option value="mic" selected>🎤 Microphone (default input)</option>
+            <option value="system">🔊 System / tab audio (internal listener)</option>
+          </select>
+        </label>
+        <div class="field" id="shareField" hidden>
+          <span>Audio capture</span>
+          <button id="shareBtn" class="btn" type="button">
+            <i id="shareIcon" class="fa-solid fa-link"></i>
+            <span id="shareLabel">Capture system audio</span>
+          </button>
+        </div>
+        <label class="field">
+          <span>Recognition language</span>
+          <select id="lang">
+            <option value="auto" selected>🔍 Auto detect (best effort)</option>
+            <option value="en-US">English (US)</option>
+            <option value="en-GB">English (UK)</option>
+            <option value="en-IN">English (India)</option>
+            <option value="hi-IN">हिन्दी — Hindi</option>
+            <option value="bn-IN">বাংলা — Bengali</option>
+            <option value="mr-IN">मराठी — Marathi</option>
+            <option value="ta-IN">தமிழ் — Tamil</option>
+            <option value="te-IN">తెలుగు — Telugu</option>
+            <option value="gu-IN">ગુજરાતી — Gujarati</option>
+            <option value="kn-IN">ಕನ್ನಡ — Kannada</option>
+            <option value="ml-IN">മലയാളം — Malayalam</option>
+            <option value="pa-IN">ਪੰਜਾਬੀ — Punjabi</option>
+            <option value="ur-PK">اردو — Urdu</option>
+            <option value="es-ES">Español</option>
+            <option value="fr-FR">Français</option>
+            <option value="de-DE">Deutsch</option>
+            <option value="it-IT">Italiano</option>
+            <option value="pt-BR">Português (BR)</option>
+            <option value="ru-RU">Русский</option>
+            <option value="nl-NL">Nederlands</option>
+            <option value="pl-PL">Polski</option>
+            <option value="tr-TR">Türkçe</option>
+            <option value="ar-SA">العربية</option>
+            <option value="fa-IR">فارسی</option>
+            <option value="he-IL">עברית</option>
+            <option value="el-GR">Ελληνικά</option>
+            <option value="sv-SE">Svenska</option>
+            <option value="uk-UA">Українська</option>
+            <option value="id-ID">Bahasa Indonesia</option>
+            <option value="th-TH">ไทย</option>
+            <option value="vi-VN">Tiếng Việt</option>
+            <option value="ja-JP">日本語</option>
+            <option value="ko-KR">한국어</option>
+            <option value="zh-CN">中文（简体）</option>
+            <option value="zh-TW">中文（繁體）</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Caption translation</span>
+          <select id="trLang">
+            <option value="" selected>Off — original only</option>
+            <option value="auto">🔍 Auto — match page language</option>
+            <option value="en">English</option>
+            <option value="es">Español</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="it">Italiano</option>
+            <option value="pt">Português</option>
+            <option value="ru">Русский</option>
+            <option value="hi">हिन्दी</option>
+            <option value="bn">বাংলা</option>
+            <option value="ta">தமிழ்</option>
+            <option value="te">తెలుగు</option>
+            <option value="mr">मराठी</option>
+            <option value="gu">ગુજરાતી</option>
+            <option value="kn">ಕನ್ನಡ</option>
+            <option value="ml">മലയാളം</option>
+            <option value="pa">ਪੰਜਾਬੀ</option>
+            <option value="ur">اردو</option>
+            <option value="ar">العربية</option>
+            <option value="fa">فارسی</option>
+            <option value="tr">Türkçe</option>
+            <option value="id">Bahasa Indonesia</option>
+            <option value="vi">Tiếng Việt</option>
+            <option value="th">ไทย</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="zh-CN">中文（简体）</option>
+            <option value="zh-TW">中文（繁體）</option>
+          </select>
+        </label>
+        <div class="field">
+          <span>Status</span>
+          <div id="status" class="status">
+            <i class="dot fa-solid fa-circle"></i>
+            <span id="statusText">Idle</span>
+          </div>
+        </div>
+        <button id="detectChip" class="chip" type="button" hidden>
+          <i id="chipIcon" class="fa-solid fa-wand-magic-sparkles"></i>
+          <span id="chipLabel"></span>
         </button>
       </div>
 
-      <label class="field">
-        <span>Recognition language</span>
-        <select id="lang">
-          <option value="auto" selected>🔍 Auto detect (best effort)</option>
-          <option value="en-US">English (US)</option>
-          <option value="en-GB">English (UK)</option>
-          <option value="en-IN">English (India)</option>
-          <option value="en-AU">English (Australia)</option>
-          <option value="hi-IN">हिन्दी — Hindi</option>
-          <option value="bn-IN">বাংলা — Bengali</option>
-          <option value="mr-IN">मराठी — Marathi</option>
-          <option value="ta-IN">தமிழ் — Tamil</option>
-          <option value="te-IN">తెలుగు — Telugu</option>
-          <option value="gu-IN">ગુજરાતી — Gujarati</option>
-          <option value="kn-IN">ಕನ್ನಡ — Kannada</option>
-          <option value="ml-IN">മലയാളം — Malayalam</option>
-          <option value="pa-IN">ਪੰਜਾਬੀ — Punjabi</option>
-          <option value="ur-PK">اردو — Urdu</option>
-          <option value="es-ES">Español — Spanish</option>
-          <option value="fr-FR">Français — French</option>
-          <option value="de-DE">Deutsch — German</option>
-          <option value="it-IT">Italiano — Italian</option>
-          <option value="pt-BR">Português (Brasil)</option>
-          <option value="ru-RU">Русский — Russian</option>
-          <option value="nl-NL">Nederlands — Dutch</option>
-          <option value="pl-PL">Polski — Polish</option>
-          <option value="tr-TR">Türkçe — Turkish</option>
-          <option value="ar-SA">العربية — Arabic</option>
-          <option value="fa-IR">فارسی — Persian</option>
-          <option value="he-IL">עברית — Hebrew</option>
-          <option value="el-GR">Ελληνικά — Greek</option>
-          <option value="sv-SE">Svenska — Swedish</option>
-          <option value="uk-UA">Українська — Ukrainian</option>
-          <option value="id-ID">Bahasa Indonesia</option>
-          <option value="ms-MY">Bahasa Melayu</option>
-          <option value="fil-PH">Filipino</option>
-          <option value="th-TH">ไทย — Thai</option>
-          <option value="vi-VN">Tiếng Việt — Vietnamese</option>
-          <option value="ja-JP">日本語 — Japanese</option>
-          <option value="ko-KR">한국어 — Korean</option>
-          <option value="zh-CN">中文（简体）— Chinese</option>
-          <option value="zh-TW">中文（繁體）— Chinese</option>
-        </select>
-      </label>
+      <div class="row" id="monitorRow" hidden>
+        <div class="field">
+          <span>Monitor volume</span>
+          <div class="vol-row">
+            <input type="range" id="volRange" min="0" max="100" value="65" />
+            <span id="volLabel" style="font-size:12px;color:var(--muted);min-width:38px">65%</span>
+            <button id="muteBtn" class="btn ghost" type="button">
+              <i id="muteIcon" class="fa-solid fa-volume-high"></i>
+              <span id="muteLabel">Audible</span>
+            </button>
+          </div>
+        </div>
+        <label class="field">
+          <span>Monitor output device</span>
+          <select id="outDev"><option value="">System default</option></select>
+        </label>
+        <button id="stopShareBtn" class="btn ghost" type="button" disabled>
+          <i class="fa-solid fa-xmark"></i><span>Stop capture</span>
+        </button>
+      </div>
 
-      <label class="field">
-        <span>Caption translation</span>
-        <select id="trLang">
-          <option value="" selected>Off — original only</option>
-          <option value="auto">🔍 Auto — match page language</option>
-          <option value="en">English</option>
-          <option value="es">Español</option>
-          <option value="fr">Français</option>
-          <option value="de">Deutsch</option>
-          <option value="it">Italiano</option>
-          <option value="pt">Português</option>
-          <option value="ru">Русский</option>
-          <option value="hi">हिन्दी</option>
-          <option value="bn">বাংলা</option>
-          <option value="ta">தமிழ்</option>
-          <option value="te">తెలుగు</option>
-          <option value="mr">मराठी</option>
-          <option value="gu">ગુજરાતી</option>
-          <option value="kn">ಕನ್ನಡ</option>
-          <option value="ml">മലയാളം</option>
-          <option value="pa">ਪੰਜਾਬੀ</option>
-          <option value="ur">اردو</option>
-          <option value="ar">العربية</option>
-          <option value="fa">فارسی</option>
-          <option value="tr">Türkçe</option>
-          <option value="id">Bahasa Indonesia</option>
-          <option value="vi">Tiếng Việt</option>
-          <option value="th">ไทย</option>
-          <option value="ja">日本語</option>
-          <option value="ko">한국어</option>
-          <option value="zh-CN">中文（简体）</option>
-          <option value="zh-TW">中文（繁體）</option>
-          <option value="nl">Nederlands</option>
-          <option value="pl">Polski</option>
-          <option value="uk">Українська</option>
-          <option value="sv">Svenska</option>
-          <option value="el">Ελληνικά</option>
-          <option value="he">עברית</option>
-        </select>
-      </label>
+      <div class="meter-wrap" id="meterWrap" hidden>
+        <span class="src-tag"><i class="fa-solid fa-wave-square"></i> IN</span>
+        <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
+        <span class="meter-label" id="meterLabel">—</span>
+      </div>
 
-      <div class="field">
-        <span>Status</span>
-        <div id="status" class="status">
-          <i class="dot fa-solid fa-circle"></i>
-          <span id="statusText">Idle</span>
+      <div class="row" style="margin-top:16px">
+        <button id="startBtn" class="btn primary" type="button">
+          <i class="fa-solid fa-microphone"></i><span>Start listening</span>
+        </button>
+        <button id="stopBtn" class="btn stop" type="button" disabled>
+          <i class="fa-solid fa-stop"></i><span>Stop</span>
+        </button>
+        <button id="clearBtn" class="btn ghost" type="button">
+          <i class="fa-solid fa-eraser"></i><span>Clear</span>
+        </button>
+      </div>
+
+      <p class="hint">
+        Allow access when prompted. Chrome ends a recognition session after short silence —
+        this page restarts it automatically. Shortcut: <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>Enter</kbd>.
+      </p>
+      <p class="hint" id="sysHint" hidden>
+        <strong>How the internal listener works.</strong> The Web Speech API only listens to the
+        <em>microphone</em>. Two ways to route system audio:
+        <ol>
+          <li><strong>Virtual cable (recommended).</strong> Install <code>VB-CABLE</code> (Win), <code>BlackHole</code> (macOS) or <code>module-null-sink</code> (Linux). Pick the cable in <b>Monitor output</b> and set it as OS default mic.</li>
+          <li><strong>Speakers → mic.</strong> Capture a <b>Chrome tab</b> with <b>Share tab audio</b> ticked and keep monitor audible.</li>
+        </ol>
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Optional — caption an audio / video file (live)</h2>
+      <p class="desc">Load a file (or drag &amp; drop onto the stage), play it <b>out loud through your speakers</b>, then press <b>Start listening</b>.</p>
+      <div class="row">
+        <label class="field">
+          <span>Media file</span>
+          <input type="file" id="mediaFile" accept="audio/*,video/*" />
+        </label>
+        <button id="clearMedia" class="btn ghost" type="button" disabled>
+          <i class="fa-solid fa-trash-can"></i><span>Remove file</span>
+        </button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Transcript &amp; export (live)</h2>
+      <p class="desc">Every finalized phrase is timestamped. Translations (if enabled) are included in exports.</p>
+      <div class="row">
+        <button id="srtBtn" class="btn" type="button" disabled><i class="fa-solid fa-download"></i><span>.SRT</span></button>
+        <button id="vttBtn" class="btn" type="button" disabled><i class="fa-solid fa-download"></i><span>.VTT</span></button>
+        <button id="txtBtn" class="btn" type="button" disabled><i class="fa-solid fa-download"></i><span>.TXT</span></button>
+        <button id="copyBtn" class="btn ghost" type="button" disabled><i class="fa-solid fa-copy"></i><span>Copy text</span></button>
+      </div>
+      <div id="transcript" class="transcript">
+        <div class="empty" id="emptyMsg">No captions yet — press “Start listening”.</div>
+        <div id="cueList"></div>
+      </div>
+      <div class="meta">
+        <span><i class="fa-solid fa-list-check"></i>Cues: <b id="cueCount">0</b></span>
+        <span><i class="fa-solid fa-font"></i>Words: <b id="wordCount">0</b></span>
+        <span><i class="fa-solid fa-clock"></i>Duration: <b id="duration">00:00</b></span>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ======================= FILE PANEL ======================= -->
+  <div id="filePanel" hidden>
+
+    <section class="card">
+      <h2>Upload media</h2>
+      <p class="desc">
+        Drop a video or audio file. Transcription runs entirely in your browser
+        using <b>Whisper</b> via <code>@xenova/transformers</code> — no server, no API key,
+        nothing leaves your machine. First run downloads the model (~40–240 MB) which is
+        cached after that.
+      </p>
+
+      <div class="drop-zone" id="dropZone">
+        <i class="fa-solid fa-cloud-arrow-up"></i>
+        <p>Click or drop a video / audio file here</p>
+        <input type="file" id="fileInput" accept="video/*,audio/*" hidden />
+      </div>
+
+      <div id="fileInfo" style="display:none;margin-top:14px;font-size:13px;color:var(--muted)">
+        <i class="fa-solid fa-file"></i>
+        <b id="fileName" style="color:var(--text)"></b>
+        <span id="fileMeta"></span>
+      </div>
+
+      <div class="row" style="margin-top:16px">
+        <label class="field">
+          <span>Whisper model</span>
+          <select id="whisperModel">
+            <option value="Xenova/whisper-tiny.en" selected>tiny.en · ~40 MB · English</option>
+            <option value="Xenova/whisper-tiny">tiny · ~40 MB · multilingual</option>
+            <option value="Xenova/whisper-base.en">base.en · ~75 MB · English</option>
+            <option value="Xenova/whisper-base">base · ~75 MB · multilingual</option>
+            <option value="Xenova/whisper-small">small · ~240 MB · multilingual (slow)</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>Language</span>
+          <select id="whisperLang">
+            <option value="">Auto-detect</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="ru">Russian</option>
+            <option value="hi">Hindi</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+            <option value="ar">Arabic</option>
+            <option value="tr">Turkish</option>
+            <option value="id">Indonesian</option>
+            <option value="vi">Vietnamese</option>
+            <option value="th">Thai</option>
+          </select>
+        </label>
+        <button id="transcribeBtn" class="btn primary" type="button" disabled>
+          <i class="fa-solid fa-play"></i><span>Transcribe</span>
+        </button>
+        <button id="cancelTranscribeBtn" class="btn ghost" type="button" hidden>
+          <i class="fa-solid fa-xmark"></i><span>Cancel</span>
+        </button>
+      </div>
+
+      <div class="progress-track" id="progressTrack" hidden>
+        <div class="progress-fill" id="progressFill"></div>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <div class="field">
+          <span>Status</span>
+          <div id="fileStatus" class="status">
+            <i class="dot fa-solid fa-circle"></i>
+            <span id="fileStatusText">Idle</span>
+          </div>
         </div>
       </div>
 
-      <button id="detectChip" class="chip" type="button" hidden>
-        <i id="chipIcon" class="fa-solid fa-wand-magic-sparkles"></i>
-        <span id="chipLabel"></span>
-      </button>
-    </div>
+      <p class="hint">
+        Transcription of a 1-minute clip typically takes 10–30 s on a modern laptop with the
+        <code>tiny</code> model. Larger models are more accurate but slower. The model is cached
+        in your browser after first download.
+      </p>
+    </section>
 
-    <div class="row" id="monitorRow" hidden>
-      <div class="field">
-        <span>Monitor volume</span>
-        <div class="vol-row">
-          <input type="range" id="volRange" min="0" max="100" value="65" />
-          <span id="volLabel" style="font-size:12px;color:var(--muted);min-width:38px">65%</span>
-          <button id="muteBtn" class="btn ghost" type="button">
-            <i id="muteIcon" class="fa-solid fa-volume-high"></i>
-            <span id="muteLabel">Audible</span>
-          </button>
-        </div>
+    <section class="card" id="previewCard" hidden>
+      <h2>Preview &amp; karaoke</h2>
+      <p class="desc">Play the file to see the word-by-word animated caption preview (matches the ASS export).</p>
+      <div class="stage karaoke" id="fileStage">
+        <video id="filePlayer" controls playsinline preload="metadata"></video>
+        <div class="karaoke-layer" id="karaokeLayer"></div>
       </div>
+    </section>
 
-      <label class="field">
-        <span>Monitor output device</span>
-        <select id="outDev"><option value="">System default</option></select>
-      </label>
+    <section class="card" id="fileTranscriptCard" hidden>
+      <h2>Transcript</h2>
+      <p class="desc">Word-level timestamps, grouped into readable segments.</p>
+      <div class="transcript" id="fileTranscript"></div>
+    </section>
 
-      <button id="stopShareBtn" class="btn ghost" type="button" disabled>
-        <i class="fa-solid fa-xmark"></i>
-        <span>Stop capture</span>
-      </button>
-    </div>
+    <section class="card" id="assCard" hidden>
+      <h2>Caption style (for ASS export)</h2>
+      <p class="desc">Matches the Python ASS generator defaults. Preview updates in real time.</p>
 
-    <div class="meter-wrap" id="meterWrap" hidden>
-      <span class="src-tag"><i class="fa-solid fa-wave-square"></i> IN</span>
-      <div class="meter"><div class="meter-fill" id="meterFill"></div></div>
-      <span class="meter-label" id="meterLabel">—</span>
-    </div>
+      <details class="assopts" open>
+        <summary>Style options</summary>
+        <div class="row">
+          <label class="field"><span>Words / cap</span><input type="number" id="assWpc" min="1" max="10" value="3" /></label>
+          <label class="field"><span>Font</span><input type="text" id="assFont" value="Montserrat" /></label>
+          <label class="field"><span>Font size</span><input type="number" id="assFs" value="72" /></label>
+          <label class="field"><span>Active</span><input type="color" id="assActive" value="#FFB117" /></label>
+          <label class="field"><span>Inactive</span><input type="color" id="assInactive" value="#FFFFFF" /></label>
+          <label class="field"><span>Outline</span><input type="color" id="assOutline" value="#000000" /></label>
+          <label class="field"><span>Outline px</span><input type="number" id="assBord" value="7" /></label>
+          <label class="field"><span>Margin V</span><input type="number" id="assMarginV" value="120" /></label>
+          <label class="field"><span>Margin LR</span><input type="number" id="assMarginLR" value="70" /></label>
+          <label class="field"><span>PlayRes</span><input type="text" id="assPlayres" value="1080x1920" style="min-width:140px" /></label>
+        </div>
+        <div class="row">
+          <label class="field"><span>Pop-in ms</span><input type="number" id="assPopIn" value="90" /></label>
+          <label class="field"><span>Pop-out ms</span><input type="number" id="assPopOut" value="200" /></label>
+          <label class="field"><span>Outline extra</span><input type="number" id="assPopExtra" value="3" /></label>
+          <label class="field"><span>Blur</span><input type="number" id="assPopBlur" step="0.1" value="0.8" /></label>
+          <label class="field"><span>Tail hold s</span><input type="number" id="assTailHold" step="0.1" value="0" /></label>
+          <label class="field" style="flex-direction:row;align-items:center;gap:8px">
+            <input type="checkbox" id="assUppercase" checked style="min-width:auto;width:16px;height:16px" />
+            <span style="text-transform:none;font-size:13px;color:var(--text)">Uppercase</span>
+          </label>
+        </div>
+      </details>
+    </section>
 
-    <div class="row" style="margin-top:16px">
-      <button id="startBtn" class="btn primary" type="button">
-        <i class="fa-solid fa-microphone"></i>
-        <span>Start listening</span>
-      </button>
-      <button id="stopBtn" class="btn stop" type="button" disabled>
-        <i class="fa-solid fa-stop"></i>
-        <span>Stop</span>
-      </button>
-      <button id="clearBtn" class="btn ghost" type="button">
-        <i class="fa-solid fa-eraser"></i>
-        <span>Clear</span>
-      </button>
-    </div>
+    <section class="card" id="exportCard" hidden>
+      <h2>Export</h2>
+      <p class="desc">Download captions. ASS includes word-level karaoke styling.</p>
+      <div class="row">
+        <button id="assBtn" class="btn primary" type="button"><i class="fa-solid fa-download"></i><span>.ASS (karaoke)</span></button>
+        <button id="srtBtnFile" class="btn" type="button"><i class="fa-solid fa-download"></i><span>.SRT</span></button>
+        <button id="vttBtnFile" class="btn" type="button"><i class="fa-solid fa-download"></i><span>.VTT</span></button>
+        <button id="txtBtnFile" class="btn" type="button"><i class="fa-solid fa-download"></i><span>.TXT</span></button>
+        <button id="jsonBtnFile" class="btn ghost" type="button"><i class="fa-solid fa-download"></i><span>.JSON words</span></button>
+      </div>
+      <p class="hint">
+        To burn captions with ffmpeg:
+        <code>ffmpeg -i input.mp4 -vf "subtitles=captions.ass" -c:a copy out.mp4</code>
+      </p>
+    </section>
 
-    <p class="hint">
-      Allow access when prompted. Chrome ends a recognition session after a short silence —
-      this page restarts it automatically so you can keep going.
-      Shortcut: <kbd>Ctrl</kbd> / <kbd>⌘</kbd> + <kbd>Enter</kbd> to start or stop.
-    </p>
-
-    <p class="hint" id="sysHint" hidden>
-      <strong>How the internal listener works.</strong> The Web Speech API only listens to the
-      <em>microphone</em> — it can't accept a media stream directly. So capturing system audio
-      means routing that audio back into a microphone input. Two ways:
-      <ol>
-        <li>
-          <strong>Virtual cable (recommended — silent &amp; reliable).</strong> Install a loopback
-          driver — <code>VB-CABLE</code> (Windows), <code>BlackHole</code> (macOS) or
-          <code>pactl load-module module-null-sink</code> (Linux). In the
-          <b>Monitor output device</b> dropdown pick the cable (e.g. <em>CABLE Input</em>).
-          Set your <b>OS default microphone</b> to the cable's <em>output</em> side
-          (e.g. <em>CABLE Output</em>). Now the recogniser hears the cable directly —
-          no speakers, no echo.
-        </li>
-        <li>
-          <strong>Speakers → mic (zero install, less reliable).</strong> Choose
-          <b>System / tab audio</b>, click <b>Capture system audio</b>, pick a
-          <b>Chrome tab</b> (not "Entire screen") and tick <b>Share tab audio</b>.
-          Keep <b>Monitor volume</b> audible. The mic picks up the speaker sound — but note
-          that the recogniser's built-in echo cancellation may filter it out. If captions
-          don't appear, switch to the cable method above.
-        </li>
-      </ol>
-      <strong>Auto-detect:</strong> recognition starts in your browser language; if nothing
-      parses it silently scans common languages, then switches based on script analysis.
-      Click the blue chip to reset.
-    </p>
-  </section>
-
-  <!-- OPTIONAL MEDIA -->
-  <section class="card">
-    <h2>Optional — caption an audio / video file</h2>
-    <p class="desc">
-      Load a file (or drag &amp; drop onto the stage), play it <b>out loud through your
-      speakers</b>, then press <b>Start listening</b>. With a virtual cable installed you
-      can route the player straight into the recogniser with no speakers at all.
-    </p>
-
-    <div class="row">
-      <label class="field">
-        <span>Media file</span>
-        <input type="file" id="mediaFile" accept="audio/*,video/*" />
-      </label>
-      <button id="clearMedia" class="btn ghost" type="button" disabled>
-        <i class="fa-solid fa-trash-can"></i>
-        <span>Remove file</span>
-      </button>
-    </div>
-  </section>
-
-  <!-- TRANSCRIPT -->
-  <section class="card">
-    <h2>Transcript &amp; export</h2>
-    <p class="desc">Every finalized phrase is timestamped and stored below. Translations (if enabled) are included in exports.</p>
-
-    <div class="row">
-      <button id="srtBtn" class="btn" type="button" disabled>
-        <i class="fa-solid fa-download"></i>
-        <span>Download .SRT</span>
-      </button>
-      <button id="vttBtn" class="btn" type="button" disabled>
-        <i class="fa-solid fa-download"></i>
-        <span>Download .VTT</span>
-      </button>
-      <button id="txtBtn" class="btn" type="button" disabled>
-        <i class="fa-solid fa-download"></i>
-        <span>Download .TXT</span>
-      </button>
-      <button id="copyBtn" class="btn ghost" type="button" disabled>
-        <i class="fa-solid fa-copy"></i>
-        <span>Copy text</span>
-      </button>
-    </div>
-
-    <div id="transcript" class="transcript">
-      <div class="empty" id="emptyMsg">No captions yet — press “Start listening”.</div>
-      <div id="cueList"></div>
-    </div>
-
-    <div class="meta">
-      <span><i class="fa-solid fa-list-check"></i>Cues: <b id="cueCount">0</b></span>
-      <span><i class="fa-solid fa-font"></i>Words: <b id="wordCount">0</b></span>
-      <span><i class="fa-solid fa-clock"></i>Duration: <b id="duration">00:00</b></span>
-    </div>
-  </section>
+  </div>
 
 </main>
 
 <footer>
-  Speech recognition uses the browser's built-in Web Speech API.
-  Chrome / Edge route audio to the platform speech service — still <b>no API key</b> required.
-  System audio capture uses <code>getDisplayMedia()</code>; no recording ever leaves your machine.
-  Timings are approximate (±0.3 s). Everything runs 100% client-side.
+  Live mode uses the browser Web Speech API. File mode uses <code>@xenova/transformers</code> (Whisper) — 100% client‑side.
+  Models cached in browser. No upload ever leaves your machine.
 </footer>
 
 <audio id="monitor" hidden autoplay playsinline></audio>
-
-<script>
-  window.gtranslateSettings = {
-    "default_language": "en",
-    "detect_browser_language": true,
-    "wrapper_selector": ".gtranslate_wrapper",
-    "flag_size": 24,
-    "native_language_names": true,
-    "alt_flags": { "en": "usa" }
-  };
-</script>
-<script src="https://cdn.gtranslate.net/widgets/latest/dropdown.js" defer
-        onerror="window.__gtFailed=true;"></script>
 
 <script>
 (function () {
@@ -793,109 +803,120 @@
 
   var $ = function (id) { return document.getElementById(id); };
 
-  var el = {
-    source:       $('source'),
-    shareField:   $('shareField'),
-    shareBtn:     $('shareBtn'),
-    shareIcon:    $('shareIcon'),
-    shareLabel:   $('shareLabel'),
-    stopShareBtn: $('stopShareBtn'),
-    monitorRow:   $('monitorRow'),
-    monitor:      $('monitor'),
-    volRange:     $('volRange'),
-    volLabel:     $('volLabel'),
-    muteBtn:      $('muteBtn'),
-    muteIcon:     $('muteIcon'),
-    muteLabel:    $('muteLabel'),
-    outDev:       $('outDev'),
-    meterWrap:    $('meterWrap'),
-    meterFill:    $('meterFill'),
-    meterLabel:   $('meterLabel'),
-    sysHint:      $('sysHint'),
-    sysWarn:      $('sysWarn'),
-    loopWarn:     $('loopWarn'),
+  /* ============================================================
+     TAB SWITCHING
+     ============================================================ */
+  var tabs = document.querySelectorAll('.tab');
+  var livePanel = $('livePanel');
+  var filePanel = $('filePanel');
+  var currentTab = 'live';
 
-    lang:         $('lang'),
-    trLang:       $('trLang'),
-    startBtn:     $('startBtn'),
-    stopBtn:      $('stopBtn'),
-    clearBtn:     $('clearBtn'),
-    status:       $('status'),
-    statusText:   $('statusText'),
-    chip:         $('detectChip'),
-    chipIcon:     $('chipIcon'),
-    chipLabel:    $('chipLabel'),
-    stage:        $('stage'),
-    fsBtn:        $('fsBtn'),
-    fsIcon:       $('fsIcon'),
-    resumeBtn:    $('resumeAudioBtn'),
-    placeholder:  $('stagePlaceholder'),
-    phText:       $('phText'),
-    player:       $('player'),
-    subFinal:     $('subFinal'),
-    subTrans:     $('subTrans'),
-    subInterim:   $('subInterim'),
-    transcript:   $('transcript'),
-    emptyMsg:     $('emptyMsg'),
-    cueList:      $('cueList'),
-    srtBtn:       $('srtBtn'),
-    vttBtn:       $('vttBtn'),
-    txtBtn:       $('txtBtn'),
-    copyBtn:      $('copyBtn'),
-    cueCount:     $('cueCount'),
-    wordCount:    $('wordCount'),
-    durationEl:   $('duration'),
-    mediaFile:    $('mediaFile'),
-    clearMedia:   $('clearMedia'),
-    supportWarn:  $('supportWarn'),
-    secureWarn:   $('secureWarn'),
-    gtWrapper:    $('gtWrapper')
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      var which = t.getAttribute('data-tab');
+      if (which === currentTab) return;
+      tabs.forEach(function (x) { x.classList.toggle('active', x === t); });
+      currentTab = which;
+      livePanel.hidden = which !== 'live';
+      filePanel.hidden = which !== 'file';
+      if (which === 'file') {
+        if (liveState.active) stopLive();
+      } else {
+        try { fileEl.player.pause(); } catch (e) {}
+      }
+    });
+  });
+
+  /* ============================================================
+     SHARED HELPERS
+     ============================================================ */
+  function pad(n, len) {
+    n = String(n);
+    while (n.length < (len || 2)) n = '0' + n;
+    return n;
+  }
+  function short(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    var h = Math.floor(sec / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    var s = sec % 60;
+    return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s);
+  }
+  function srtTime(sec) {
+    sec = Math.max(0, sec);
+    var h  = Math.floor(sec / 3600);
+    var m  = Math.floor((sec % 3600) / 60);
+    var s  = Math.floor(sec % 60);
+    var ms = Math.round((sec - Math.floor(sec)) * 1000);
+    if (ms >= 1000) ms = 999;
+    return pad(h) + ':' + pad(m) + ':' + pad(s) + ',' + pad(ms, 3);
+  }
+  function vttTime(sec) { return srtTime(sec).replace(',', '.'); }
+  function fileStamp() {
+    var d = new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
+  }
+  function downloadBlob(filename, content, mime) {
+    var blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
+  }
+
+  /* ============================================================
+     ============================================================
+     LIVE MODE
+     ============================================================
+     ============================================================ */
+  var el = {
+    source: $('source'), shareField: $('shareField'), shareBtn: $('shareBtn'),
+    shareIcon: $('shareIcon'), shareLabel: $('shareLabel'),
+    stopShareBtn: $('stopShareBtn'), monitorRow: $('monitorRow'),
+    monitor: $('monitor'), volRange: $('volRange'), volLabel: $('volLabel'),
+    muteBtn: $('muteBtn'), muteIcon: $('muteIcon'), muteLabel: $('muteLabel'),
+    outDev: $('outDev'), meterWrap: $('meterWrap'), meterFill: $('meterFill'),
+    meterLabel: $('meterLabel'), sysHint: $('sysHint'), sysWarn: $('sysWarn'),
+    loopWarn: $('loopWarn'), lang: $('lang'), trLang: $('trLang'),
+    startBtn: $('startBtn'), stopBtn: $('stopBtn'), clearBtn: $('clearBtn'),
+    status: $('status'), statusText: $('statusText'), chip: $('detectChip'),
+    chipIcon: $('chipIcon'), chipLabel: $('chipLabel'), stage: $('stage'),
+    fsBtn: $('fsBtn'), fsIcon: $('fsIcon'), resumeBtn: $('resumeAudioBtn'),
+    placeholder: $('stagePlaceholder'), phText: $('phText'), player: $('player'),
+    subFinal: $('subFinal'), subTrans: $('subTrans'), subInterim: $('subInterim'),
+    transcript: $('transcript'), emptyMsg: $('emptyMsg'), cueList: $('cueList'),
+    srtBtn: $('srtBtn'), vttBtn: $('vttBtn'), txtBtn: $('txtBtn'),
+    copyBtn: $('copyBtn'), cueCount: $('cueCount'), wordCount: $('wordCount'),
+    durationEl: $('duration'), mediaFile: $('mediaFile'), clearMedia: $('clearMedia'),
+    supportWarn: $('supportWarn'), secureWarn: $('secureWarn')
   };
 
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   var SR_OK = !!SR;
-
   if (!SR_OK) {
     el.supportWarn.classList.add('show');
     el.startBtn.disabled = true;
     el.lang.disabled = true;
   }
-  if (SR_OK && !window.isSecureContext) {
-    el.secureWarn.classList.add('show');
-  }
+  if (SR_OK && !window.isSecureContext) el.secureWarn.classList.add('show');
 
-  setTimeout(function () {
-    if (el.gtWrapper && el.gtWrapper.children.length === 0) {
-      var tl = (navigator.language || 'en').slice(0, 2);
-      var a = document.createElement('a');
-      a.className = 'gt-fallback';
-      a.target = '_blank';
-      a.rel = 'noopener';
-      a.href = 'https://translate.google.com/translate?sl=auto&tl=' + tl +
-               '&u=' + encodeURIComponent(location.href);
-      a.textContent = '🌐 Translate page';
-      el.gtWrapper.appendChild(a);
-    }
-  }, 3000);
-
-  var state = {
+  var liveState = {
     active:false, rec:null, timer:null, ticker:null, gen:0,
     offset:0, t0:0, lastEnd:0, segs:[],
     trOn:false, fails:0, errs:0,
     autoLang:null, scanIdx:-1, noSpeech:0, detCand:null, detStreak:0
   };
-
-  var cap = {
+  var liveCap = {
     stream:null, actx:null, analyser:null, data:null, raf:0,
     volume:0.65, muted:false, wholeScreen:false, cableMode:false,
     silenceTimer:null
   };
 
   function browserLang() {
-    return String((navigator.languages && navigator.languages[0]) ||
-                   navigator.language || 'en-US');
+    return String((navigator.languages && navigator.languages[0]) || navigator.language || 'en-US');
   }
-
   function langName(code) {
     if (!code) return '';
     var opt = el.lang.querySelector('option[value="' + code + '"]');
@@ -907,192 +928,102 @@
     }
     return code;
   }
-
   function resolveRecogLang() {
     if (el.lang.value !== 'auto') return el.lang.value;
-    return state.autoLang || browserLang() || 'en-US';
+    return liveState.autoLang || browserLang() || 'en-US';
   }
-
-  var SCAN_LIST = [
-    'en-US', 'hi-IN', 'es-ES', 'fr-FR', 'de-DE', 'pt-BR', 'ar-SA', 'zh-CN',
-    'ja-JP', 'ru-RU', 'id-ID', 'tr-TR', 'ta-IN', 'te-IN', 'bn-IN', 'mr-IN',
-    'ko-KR', 'it-IT', 'nl-NL', 'pl-PL', 'vi-VN', 'th-TH', 'ur-PK', 'fa-IR',
-    'gu-IN', 'kn-IN', 'ml-IN', 'pa-IN', 'sv-SE', 'uk-UA', 'el-GR', 'he-IL'
-  ];
-
+  var SCAN_LIST = ['en-US','hi-IN','es-ES','fr-FR','de-DE','pt-BR','ar-SA','zh-CN','ja-JP','ru-RU','id-ID','tr-TR','ta-IN','te-IN','bn-IN','mr-IN','ko-KR','it-IT','nl-NL','pl-PL','vi-VN','th-TH','ur-PK','fa-IR','gu-IN','kn-IN','ml-IN','pa-IN','sv-SE','uk-UA','el-GR','he-IL'];
   var LATIN_HINTS = {
-    'en-US': ['the','and','you','that','this','with','have','for','not','are','was','what','your','can','but','all','about','just','like','know'],
-    'es-ES': ['que','de','no','el','la','los','las','un','una','es','por','con','para','pero','como','más','muy','yo','esto','eso','hay'],
-    'fr-FR': ['le','la','les','de','des','et','est','un','une','que','qui','pas','pour','dans','sur','avec','vous','nous','je','il','elle','ce','cette'],
-    'de-DE': ['der','die','das','und','ist','nicht','ich','du','er','sie','es','ein','eine','mit','auf','für','von','zu','den','dem','sich','auch'],
-    'it-IT': ['il','lo','la','gli','le','di','che','e','è','non','per','con','una','un','sono','questo','questa','ma','come','più'],
-    'pt-BR': ['os','as','de','que','e','é','não','um','uma','para','com','por','isso','este','esta','mas','como','mais','você','muito'],
-    'nl-NL': ['het','een','en','is','niet','ik','je','dat','die','van','op','te','met','voor','zijn','er','maar','ook','dit','wat'],
-    'pl-PL': ['się','to','jest','nie','że','do','od','tak','jak','ale','co','mi','go','ja','ty','jestem','bardzo','tylko','jeszcze'],
-    'tr-TR': ['bir','bu','da','de','için','ile','çok','daha','ne','var','yok','ben','sen','ama','gibi','kadar','şey','olan','olarak'],
-    'id-ID': ['yang','dan','di','ke','dari','ini','itu','untuk','dengan','tidak','ada','saya','kamu','kami','akan','sudah','bisa','juga'],
-    'vi-VN': ['của','là','có','không','được','trong','cho','một','này','đó','với','như','để','người','tôi','bạn','chúng','rất'],
-    'sv-SE': ['och','att','det','som','är','för','på','med','den','till','inte','jag','du','han','hon','vi','om','men','också']
+    'en-US':['the','and','you','that','this','with','have','for','not','are','was','what','your','can','but','all','about','just','like','know'],
+    'es-ES':['que','de','no','el','la','los','las','un','una','es','por','con','para','pero','como','más','muy','yo','esto','eso','hay'],
+    'fr-FR':['le','la','les','de','des','et','est','un','une','que','qui','pas','pour','dans','sur','avec','vous','nous','je','il','elle','ce','cette'],
+    'de-DE':['der','die','das','und','ist','nicht','ich','du','er','sie','es','ein','eine','mit','auf','für','von','zu','den','dem','sich','auch'],
+    'it-IT':['il','lo','la','gli','le','di','che','e','è','non','per','con','una','un','sono','questo','questa','ma','come','più'],
+    'pt-BR':['os','as','de','que','e','é','não','um','uma','para','com','por','isso','este','esta','mas','como','mais','você','muito'],
+    'nl-NL':['het','een','en','is','niet','ik','je','dat','die','van','op','te','met','voor','zijn','er','maar','ook','dit','wat'],
+    'pl-PL':['się','to','jest','nie','że','do','od','tak','jak','ale','co','mi','go','ja','ty','jestem','bardzo','tylko','jeszcze'],
+    'tr-TR':['bir','bu','da','de','için','ile','çok','daha','ne','var','yok','ben','sen','ama','gibi','kadar','şey','olan','olarak'],
+    'id-ID':['yang','dan','di','ke','dari','ini','itu','untuk','dengan','tidak','ada','saya','kamu','kami','akan','sudah','bisa','juga'],
+    'vi-VN':['của','là','có','không','được','trong','cho','một','này','đó','với','như','để','người','tôi','bạn','chúng','rất'],
+    'sv-SE':['och','att','det','som','är','för','på','med','den','till','inte','jag','du','han','hon','vi','om','men','också']
   };
 
   function detectScript(text) {
     var t = String(text || '');
     if (!t) return null;
-
     if (/[\u0600-\u06FF\u0750-\u077F]/.test(t)) {
-      if (/[\u0679\u0688\u0691\u06BA\u06D2\u06C1]/.test(t)) return { code: 'ur-PK', name: 'اردو' };
-      if (/[\u067E\u0686\u0698\u06AF]/.test(t))             return { code: 'fa-IR', name: 'فارسی' };
-      return { code: 'ar-SA', name: 'العربية' };
+      if (/[\u0679\u0688\u0691\u06BA\u06D2\u06C1]/.test(t)) return { code:'ur-PK', name:'اردو' };
+      if (/[\u067E\u0686\u0698\u06AF]/.test(t)) return { code:'fa-IR', name:'فارسی' };
+      return { code:'ar-SA', name:'العربية' };
     }
-    if (/[\u0900-\u097F]/.test(t)) return { code: 'hi-IN', name: 'हिन्दी' };
-    if (/[\u0980-\u09FF]/.test(t)) return { code: 'bn-IN', name: 'বাংলা' };
-    if (/[\u0A00-\u0A7F]/.test(t)) return { code: 'pa-IN', name: 'ਪੰਜਾਬੀ' };
-    if (/[\u0A80-\u0AFF]/.test(t)) return { code: 'gu-IN', name: 'ગુજરાતી' };
-    if (/[\u0B80-\u0BFF]/.test(t)) return { code: 'ta-IN', name: 'தமிழ்' };
-    if (/[\u0C00-\u0C7F]/.test(t)) return { code: 'te-IN', name: 'తెలుగు' };
-    if (/[\u0C80-\u0CFF]/.test(t)) return { code: 'kn-IN', name: 'ಕನ್ನಡ' };
-    if (/[\u0D00-\u0D7F]/.test(t)) return { code: 'ml-IN', name: 'മലയാളം' };
-    if (/[\u0590-\u05FF]/.test(t)) return { code: 'he-IL', name: 'עברית' };
-    if (/[\u0370-\u03FF]/.test(t)) return { code: 'el-GR', name: 'Ελληνικά' };
-    if (/[\u0400-\u04FF]/.test(t)) return { code: 'ru-RU', name: 'Русский' };
-    if (/[\u0E00-\u0E7F]/.test(t)) return { code: 'th-TH', name: 'ไทย' };
-    if (/[\u3040-\u30FF]/.test(t)) return { code: 'ja-JP', name: '日本語' };
-    if (/[\uAC00-\uD7AF]/.test(t)) return { code: 'ko-KR', name: '한국어' };
-    if (/[\u4E00-\u9FFF]/.test(t)) return { code: 'zh-CN', name: '中文' };
+    if (/[\u0900-\u097F]/.test(t)) return { code:'hi-IN', name:'हिन्दी' };
+    if (/[\u0980-\u09FF]/.test(t)) return { code:'bn-IN', name:'বাংলা' };
+    if (/[\u0A00-\u0A7F]/.test(t)) return { code:'pa-IN', name:'ਪੰਜਾਬੀ' };
+    if (/[\u0A80-\u0AFF]/.test(t)) return { code:'gu-IN', name:'ગુજરાતી' };
+    if (/[\u0B80-\u0BFF]/.test(t)) return { code:'ta-IN', name:'தமிழ்' };
+    if (/[\u0C00-\u0C7F]/.test(t)) return { code:'te-IN', name:'తెలుగు' };
+    if (/[\u0C80-\u0CFF]/.test(t)) return { code:'kn-IN', name:'ಕನ್ನಡ' };
+    if (/[\u0D00-\u0D7F]/.test(t)) return { code:'ml-IN', name:'മലയാളം' };
+    if (/[\u0590-\u05FF]/.test(t)) return { code:'he-IL', name:'עברית' };
+    if (/[\u0370-\u03FF]/.test(t)) return { code:'el-GR', name:'Ελληνικά' };
+    if (/[\u0400-\u04FF]/.test(t)) return { code:'ru-RU', name:'Русский' };
+    if (/[\u0E00-\u0E7F]/.test(t)) return { code:'th-TH', name:'ไทย' };
+    if (/[\u3040-\u30FF]/.test(t)) return { code:'ja-JP', name:'日本語' };
+    if (/[\uAC00-\uD7AF]/.test(t)) return { code:'ko-KR', name:'한국어' };
+    if (/[\u4E00-\u9FFF]/.test(t)) return { code:'zh-CN', name:'中文' };
 
     var words;
-    try {
-      words = t.toLowerCase().split(/[^\p{L}\p{M}]+/u).filter(function (w) { return w.length > 1; });
-    } catch (e) {
-      words = t.toLowerCase().split(/[^a-zà-ÿ]+/i).filter(function (w) { return w.length > 1; });
-    }
+    try { words = t.toLowerCase().split(/[^\p{L}\p{M}]+/u).filter(function(w){return w.length>1;}); }
+    catch (e) { words = t.toLowerCase().split(/[^a-zà-ÿ]+/i).filter(function(w){return w.length>1;}); }
     if (words.length < 3) return null;
-
-    var best = null, bestScore = 0, bestHits = 0;
+    var best=null, bestScore=0, bestHits=0;
     for (var code in LATIN_HINTS) {
       if (!Object.prototype.hasOwnProperty.call(LATIN_HINTS, code)) continue;
       var list = LATIN_HINTS[code], hits = 0;
-      for (var i = 0; i < words.length; i++) {
-        if (list.indexOf(words[i]) !== -1) hits++;
-      }
+      for (var i=0;i<words.length;i++) if (list.indexOf(words[i]) !== -1) hits++;
       var score = hits / words.length;
       if (hits >= 2 && score > bestScore) { bestScore = score; bestHits = hits; best = code; }
     }
     if (best && bestScore >= 0.22 && bestHits >= 2) {
-      return { code: best, name: langName(best), latin: true };
+      return { code:best, name: langName(best), latin:true };
     }
     return null;
   }
 
-  function pad(n, len) {
-    n = String(n);
-    while (n.length < (len || 2)) n = '0' + n;
-    return n;
+  function liveElapsed() {
+    return liveState.offset + (performance.now() - liveState.t0) / 1000;
   }
-
-  function elapsed() {
-    return state.offset + (performance.now() - state.t0) / 1000;
-  }
-
-  function ts(sec, sep) {
-    sec = Math.max(0, sec);
-    var h  = Math.floor(sec / 3600);
-    var m  = Math.floor((sec % 3600) / 60);
-    var s  = Math.floor(sec % 60);
-    var ms = Math.round((sec - Math.floor(sec)) * 1000);
-    if (ms >= 1000) ms = 999;
-    return pad(h) + ':' + pad(m) + ':' + pad(s) + sep + pad(ms, 3);
-  }
-
-  function short(sec) {
-    sec = Math.max(0, Math.floor(sec));
-    var h = Math.floor(sec / 3600);
-    var m = Math.floor((sec % 3600) / 60);
-    var s = sec % 60;
-    return (h ? h + ':' + pad(m) : pad(m)) + ':' + pad(s);
-  }
-
-  function stamp() {
-    var d = new Date();
-    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-           '_' + pad(d.getHours()) + pad(d.getMinutes()) + pad(d.getSeconds());
-  }
-
-  function getCookie(name) {
-    var m = document.cookie.match(new RegExp(
-      '(?:^|; )' + name.replace(/([.*+?^${}()|[\]\\])/g, '\\$1') + '=([^;]*)'
-    ));
-    return m ? decodeURIComponent(m[1]) : null;
-  }
-
-  function pageTargetLang() {
-    var c = getCookie('googtrans');
-    if (c) {
-      var parts = c.split('/').filter(Boolean);
-      if (parts.length >= 2) return parts[1];
-    }
-    var hl = (document.documentElement.lang || '').toLowerCase();
-    if (hl && hl.indexOf('en') !== 0) return hl;
-    return null;
-  }
-
-  function resolveTargetLang() {
-    var v = el.trLang.value;
-    if (v !== 'auto') return v;
-    var p = pageTargetLang();
-    if (p) return p.split('-')[0];
-    return (browserLang() || 'en').split('-')[0];
-  }
-
-  function isCableLabel(label) {
-    return /cable|blackhole|loopback|virtual|vb-audio|vb-cable|soundflower|null output|monitor of/i
-      .test(label || '');
-  }
-
   function setStatus(kind, text) {
     el.status.className = 'status' + (kind ? ' ' + kind : '');
     el.statusText.textContent = text;
   }
-
   function refreshButtons() {
-    el.startBtn.disabled = !SR_OK || state.active;
-    el.stopBtn.disabled  = !state.active;
-    var has = state.segs.length > 0;
-    el.srtBtn.disabled  = !has;
-    el.vttBtn.disabled  = !has;
-    el.txtBtn.disabled  = !has;
-    el.copyBtn.disabled = !has;
+    el.startBtn.disabled = !SR_OK || liveState.active;
+    el.stopBtn.disabled = !liveState.active;
+    var has = liveState.segs.length > 0;
+    el.srtBtn.disabled = !has; el.vttBtn.disabled = !has;
+    el.txtBtn.disabled = !has; el.copyBtn.disabled = !has;
   }
-
   function refreshStats() {
     var words = 0;
-    for (var i = 0; i < state.segs.length; i++) {
-      words += state.segs[i].text.split(/\s+/).filter(Boolean).length;
-    }
-    el.cueCount.textContent  = state.segs.length;
+    for (var i=0;i<liveState.segs.length;i++) words += liveState.segs[i].text.split(/\s+/).filter(Boolean).length;
+    el.cueCount.textContent = liveState.segs.length;
     el.wordCount.textContent = words;
-    var last = state.segs[state.segs.length - 1];
+    var last = liveState.segs[liveState.segs.length-1];
     el.durationEl.textContent = short(last ? last.end : 0);
   }
-
-  function updateEmptyState() {
-    if (!el.emptyMsg) return;
-    el.emptyMsg.style.display = state.segs.length ? 'none' : '';
-  }
+  function updateEmptyState() { if (el.emptyMsg) el.emptyMsg.style.display = liveState.segs.length ? 'none' : ''; }
 
   var flashTimer = null;
-
   function updateLangHint() {
     if (!el.chip) return;
     if (el.lang.value !== 'auto') { el.chip.hidden = true; return; }
-    var code = state.autoLang || browserLang();
+    var code = liveState.autoLang || browserLang();
     el.chip.hidden = false;
     el.chip.classList.remove('busy');
     el.chipIcon.className = 'fa-solid fa-wand-magic-sparkles';
     el.chipLabel.textContent = 'Auto · ' + (langName(code) || code) + ' · ' + code;
-    el.chip.title = 'Auto-detected language — click to reset to your browser language';
   }
-
   function flashChip(msg) {
     if (!el.chip || el.lang.value !== 'auto') return;
     el.chip.hidden = false;
@@ -1102,68 +1033,51 @@
     clearTimeout(flashTimer);
     flashTimer = setTimeout(updateLangHint, 2400);
   }
-
   function updateSubs() {
-    var last = state.segs[state.segs.length - 1];
+    var last = liveState.segs[liveState.segs.length-1];
     if (last) {
       el.subFinal.classList.remove('placeholder');
       el.subFinal.textContent = last.text;
-      if (state.trOn && last.tr) {
-        el.subTrans.textContent = last.tr;
-        el.subTrans.hidden = false;
-      } else {
-        el.subTrans.textContent = '';
-        el.subTrans.hidden = true;
-      }
+      if (liveState.trOn && last.tr) {
+        el.subTrans.textContent = last.tr; el.subTrans.hidden = false;
+      } else { el.subTrans.textContent = ''; el.subTrans.hidden = true; }
     } else {
       el.subFinal.classList.add('placeholder');
       el.subFinal.textContent = 'Press “Start listening” and begin speaking…';
-      el.subTrans.textContent = '';
-      el.subTrans.hidden = true;
+      el.subTrans.textContent = ''; el.subTrans.hidden = true;
     }
   }
-
   function updateSourceUI() {
     var isSys = el.source.value === 'system';
     el.shareField.hidden = !isSys;
     el.monitorRow.hidden = !isSys;
-    el.sysHint.hidden    = !isSys;
-
-    if (!isSys) {
-      el.sysWarn.classList.remove('show');
-      el.loopWarn.classList.remove('show');
-    }
-
+    el.sysHint.hidden = !isSys;
+    if (!isSys) { el.sysWarn.classList.remove('show'); el.loopWarn.classList.remove('show'); }
     if (isSys) {
-      el.phText.textContent = cap.stream
-        ? 'System audio captured — press “Start listening”'
-        : 'Press “Capture system audio”, then “Start listening”';
-    } else if (!state.active) {
+      var canShare = window.isSecureContext && navigator.mediaDevices &&
+                     typeof navigator.mediaDevices.getDisplayMedia === 'function';
+      el.shareBtn.disabled = !canShare;
+      el.shareBtn.title = canShare ? '' : 'System audio capture needs HTTPS (or localhost) in Chrome / Edge';
+      el.phText.textContent = liveCap.stream ? 'System audio captured — press “Start listening”'
+                                             : 'Press “Capture system audio”, then “Start listening”';
+    } else if (!liveState.active) {
       el.phText.textContent = 'Press “Start listening” and begin speaking…';
     }
   }
 
-  function buildRow(seg) {
+  function liveRow(seg) {
     var row = document.createElement('div');
     row.className = 'seg';
-    var time = document.createElement('span');
-    time.className = 'seg-time';
-    var wrap = document.createElement('span');
-    wrap.className = 'seg-text';
-    var orig = document.createElement('span');
-    orig.className = 'seg-orig';
-    var tr = document.createElement('span');
-    tr.className = 'seg-tr';
-    tr.hidden = true;
-    wrap.appendChild(orig);
-    wrap.appendChild(tr);
-    row.appendChild(time);
-    row.appendChild(wrap);
+    var time = document.createElement('span'); time.className = 'seg-time';
+    var wrap = document.createElement('span'); wrap.className = 'seg-text';
+    var orig = document.createElement('span'); orig.className = 'seg-orig';
+    var tr = document.createElement('span'); tr.className = 'seg-tr'; tr.hidden = true;
+    wrap.appendChild(orig); wrap.appendChild(tr);
+    row.appendChild(time); row.appendChild(wrap);
     seg.el = row; seg.timeEl = time; seg.origEl = orig; seg.trEl = tr;
     return row;
   }
-
-  function paintRow(seg) {
+  function livePaint(seg) {
     if (!seg.el) return;
     seg.timeEl.textContent = short(seg.start) + ' → ' + short(seg.end);
     seg.origEl.textContent = seg.text;
@@ -1173,117 +1087,109 @@
 
   var trCache = Object.create(null);
   var trFailures = 0;
-
   function translateText(text, target) {
     var key = target + '|' + text;
     if (trCache[key]) return Promise.resolve(trCache[key]);
     var url = 'https://translate.googleapis.com/translate_a/single' +
-              '?client=gtx&dj=1&sl=auto&tl=' + encodeURIComponent(target) +
-              '&dt=t&q=' + encodeURIComponent(text);
+              '?client=gtx&dj=1&sl=auto&tl=' + encodeURIComponent(target) + '&dt=t&q=' + encodeURIComponent(text);
     return fetch(url).then(function (res) {
       if (!res.ok) throw new Error('HTTP ' + res.status);
       return res.json();
     }).then(function (data) {
       var out = '';
-      if (data && data.sentences && data.sentences.length) {
-        for (var i = 0; i < data.sentences.length; i++) out += data.sentences[i].trans || '';
-      } else if (Array.isArray(data) && Array.isArray(data[0])) {
-        for (var j = 0; j < data[0].length; j++) out += (data[0][j] && data[0][j][0]) || '';
-      }
-      out = String(out).replace(/\s+/g, ' ').trim();
+      if (data && data.sentences) for (var i=0;i<data.sentences.length;i++) out += data.sentences[i].trans || '';
+      else if (Array.isArray(data) && Array.isArray(data[0])) for (var j=0;j<data[0].length;j++) out += (data[0][j]&&data[0][j][0]) || '';
+      out = String(out).replace(/\s+/g,' ').trim();
       if (out) { trCache[key] = out; trFailures = 0; }
       return out;
     });
   }
-
+  function getCookie(name) {
+    var m = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.*+?^${}()|[\]\\])/g,'\\$1') + '=([^;]*)'));
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  function pageTargetLang() {
+    var c = getCookie('googtrans');
+    if (c) { var p = c.split('/').filter(Boolean); if (p.length >= 2) return p[1]; }
+    var hl = (document.documentElement.lang || '').toLowerCase();
+    if (hl && hl.indexOf('en') !== 0) return hl;
+    return null;
+  }
+  function resolveTargetLang() {
+    var v = el.trLang.value;
+    if (v !== 'auto') return v;
+    var p = pageTargetLang();
+    if (p) return p.split('-')[0];
+    return (browserLang() || 'en').split('-')[0];
+  }
   function translateSeg(seg) {
-    if (!state.trOn) return;
+    if (!liveState.trOn) return;
     var target = resolveTargetLang();
     if (!target) return;
     clearTimeout(seg.trTimer);
     seg.trTimer = setTimeout(function () {
       translateText(seg.text, target).then(function (out) {
-        if (!out) return;
-        if (!state.trOn || resolveTargetLang() !== target) return;
-        seg.tr = out;
-        paintRow(seg);
-        updateSubs();
+        if (!out || !liveState.trOn || resolveTargetLang() !== target) return;
+        seg.tr = out; livePaint(seg); updateSubs();
       }).catch(function () {
         trFailures++;
-        if (trFailures === 3) {
-          state.trOn = false;
-          el.trLang.value = '';
-          updateSubs();
-        }
+        if (trFailures === 3) { liveState.trOn = false; el.trLang.value = ''; updateSubs(); }
       });
     }, 220);
   }
 
   function applyAutoLang(code, reason) {
-    state.autoLang  = code;
-    state.scanIdx   = SCAN_LIST.indexOf(code);
-    state.detCand   = null;
-    state.detStreak = 0;
+    liveState.autoLang = code;
+    liveState.scanIdx = SCAN_LIST.indexOf(code);
+    liveState.detCand = null; liveState.detStreak = 0;
     updateLangHint();
     flashChip('Auto → ' + (langName(code) || code) + (reason ? ' · ' + reason : ''));
     restartRecognizer();
   }
-
   function analyzeAuto(seg) {
-    if (el.lang.value !== 'auto') return;
-    if (!seg || !seg.text) return;
+    if (el.lang.value !== 'auto' || !seg || !seg.text) return;
     var det = detectScript(seg.text);
-    if (!det) { state.detStreak = 0; state.detCand = null; return; }
-    var current = state.autoLang || browserLang();
+    if (!det) { liveState.detStreak = 0; liveState.detCand = null; return; }
+    var current = liveState.autoLang || browserLang();
     if (String(det.code).split('-')[0] === String(current).split('-')[0]) {
-      state.detStreak = 0; state.detCand = null; return;
+      liveState.detStreak = 0; liveState.detCand = null; return;
     }
-    if (state.detCand === det.code) state.detStreak++;
-    else { state.detCand = det.code; state.detStreak = 1; }
+    if (liveState.detCand === det.code) liveState.detStreak++;
+    else { liveState.detCand = det.code; liveState.detStreak = 1; }
     var need = det.latin ? 4 : 2;
-    if (state.detStreak >= need) applyAutoLang(det.code, 'detected');
+    if (liveState.detStreak >= need) applyAutoLang(det.code, 'detected');
     else flashChip('Detected ' + (det.name || det.code) + '…');
   }
-
   function advanceScan() {
-    state.scanIdx = (state.scanIdx + 1) % SCAN_LIST.length;
-    state.autoLang = SCAN_LIST[state.scanIdx];
+    liveState.scanIdx = (liveState.scanIdx + 1) % SCAN_LIST.length;
+    liveState.autoLang = SCAN_LIST[liveState.scanIdx];
     updateLangHint();
-    flashChip('Scanning: ' + (langName(state.autoLang) || state.autoLang));
+    flashChip('Scanning: ' + (langName(liveState.autoLang) || liveState.autoLang));
   }
-
   function finalize(raw) {
     var text = String(raw || '').replace(/\s+/g, ' ').trim();
     if (!text) return;
-    var end   = elapsed();
-    var start = state.lastEnd;
-    var prev  = state.segs[state.segs.length - 1];
+    var end = liveElapsed();
+    var start = liveState.lastEnd;
+    var prev = liveState.segs[liveState.segs.length-1];
     if (end <= start) end = start + 0.6;
     if (!prev) start = Math.max(0, end - Math.max(0.6, text.length * 0.055));
-    var shouldMerge = prev &&
-      (start - prev.end) < 0.85 &&
-      (prev.text.length + text.length) < 110 &&
-      !/[.!?…।。？！]$/.test(prev.text);
+    var shouldMerge = prev && (start - prev.end) < 0.85 &&
+      (prev.text.length + text.length) < 110 && !/[.!?…।。？！]$/.test(prev.text);
     var seg;
     if (shouldMerge) {
       prev.text = (prev.text + ' ' + text).trim();
-      prev.end  = end;
-      prev.tr   = '';
-      paintRow(prev);
-      seg = prev;
+      prev.end = end; prev.tr = ''; livePaint(prev); seg = prev;
     } else {
-      seg = { start: start, end: end, text: text, tr: '', el: null };
-      state.segs.push(seg);
-      el.cueList.appendChild(buildRow(seg));
-      paintRow(seg);
+      seg = { start:start, end:end, text:text, tr:'', el:null };
+      liveState.segs.push(seg);
+      el.cueList.appendChild(liveRow(seg));
+      livePaint(seg);
     }
-    state.lastEnd = end;
-    updateEmptyState();
-    updateSubs();
-    translateSeg(seg);
-    analyzeAuto(seg);
-    refreshStats();
-    refreshButtons();
+    liveState.lastEnd = end;
+    updateEmptyState(); updateSubs();
+    translateSeg(seg); analyzeAuto(seg);
+    refreshStats(); refreshButtons();
     el.transcript.scrollTop = el.transcript.scrollHeight;
   }
 
@@ -1291,159 +1197,162 @@
     var err = ev && ev.error;
     if (err === 'aborted') return;
     if (err === 'no-speech') {
-      if (el.lang.value === 'auto' && state.segs.length === 0 && state.active) {
-        state.noSpeech++;
-        if (state.noSpeech >= 3) { state.noSpeech = 0; advanceScan(); }
+      if (el.lang.value === 'auto' && liveState.segs.length === 0 && liveState.active) {
+        liveState.noSpeech++;
+        if (liveState.noSpeech >= 3) { liveState.noSpeech = 0; advanceScan(); }
       }
       return;
     }
     if (err === 'not-allowed' || err === 'service-not-allowed') {
       setStatus('error', 'Microphone blocked');
-      el.secureWarn.classList.add('show');
-      stopAll();
-      return;
+      el.secureWarn.classList.add('show'); stopLive(); return;
     }
-    if (err === 'audio-capture') { setStatus('error', 'No microphone'); stopAll(); return; }
+    if (err === 'audio-capture') { setStatus('error', 'No microphone'); stopLive(); return; }
     if (err === 'network') {
-      state.errs++;
-      if (state.errs > 6) { setStatus('error', 'Network error — stopped'); stopAll(); }
+      liveState.errs++;
+      if (liveState.errs > 6) { setStatus('error','Network error — stopped'); stopLive(); }
       else setStatus('error', 'Network error — retrying…');
       return;
     }
     setStatus('error', 'Error: ' + err);
   }
-
   function spinUp() {
-    if (!SR_OK || !state.active) return;
-    clearTimeout(state.timer);
+    if (!SR_OK || !liveState.active) return;
+    clearTimeout(liveState.timer);
     var rec;
     try { rec = new SR(); } catch (e) { return; }
-    var myGen = ++state.gen;
-    state.rec = rec;
-    rec.continuous      = true;
-    rec.interimResults  = true;
-    rec.maxAlternatives = 1;
-    rec.lang            = resolveRecogLang();
+    var myGen = ++liveState.gen;
+    liveState.rec = rec;
+    rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.lang = resolveRecogLang();
     var seen = (typeof WeakSet !== 'undefined') ? new WeakSet() : null;
-
     rec.onstart = function () {
-      if (myGen !== state.gen) return;
-      state.fails = 0; state.errs = 0;
+      if (myGen !== liveState.gen) return;
+      liveState.fails = 0; liveState.errs = 0;
       setStatus('listening', 'Listening…');
       el.stage.classList.add('listening');
       el.phText.textContent = 'Listening… speak now';
     };
     rec.onresult = function (ev) {
-      if (myGen !== state.gen) return;
-      state.noSpeech = 0;
+      if (myGen !== liveState.gen) return;
+      liveState.noSpeech = 0;
       var interim = '';
       for (var i = ev.resultIndex; i < ev.results.length; i++) {
         var res = ev.results[i];
         var txt = (res[0] && res[0].transcript) || '';
         if (res.isFinal) {
           if (seen) { if (seen.has(res)) continue; seen.add(res); }
-          var clean = String(txt).replace(/\s+/g, ' ').trim();
+          var clean = String(txt).replace(/\s+/g,' ').trim();
           if (clean) finalize(clean);
         } else interim += txt;
       }
       el.subInterim.textContent = interim;
     };
-    rec.onerror = function (ev) { if (myGen === state.gen) handleError(ev); };
+    rec.onerror = function (ev) { if (myGen === liveState.gen) handleError(ev); };
     rec.onend = function () {
-      if (myGen !== state.gen) return;
+      if (myGen !== liveState.gen) return;
       el.subInterim.textContent = '';
-      if (!state.active) {
-        el.stage.classList.remove('listening');
-        setStatus('idle', 'Stopped');
-        return;
-      }
-      clearTimeout(state.timer);
-      state.timer = setTimeout(spinUp, 280);
+      if (!liveState.active) { el.stage.classList.remove('listening'); setStatus('idle','Stopped'); return; }
+      clearTimeout(liveState.timer);
+      liveState.timer = setTimeout(spinUp, 280);
     };
     try { rec.start(); }
     catch (e) {
-      state.fails++;
-      if (state.fails > 30) { setStatus('error', 'Could not start microphone'); stopAll(); return; }
-      clearTimeout(state.timer);
-      state.timer = setTimeout(spinUp, 500);
+      liveState.fails++;
+      if (liveState.fails > 30) { setStatus('error','Could not start microphone'); stopLive(); return; }
+      clearTimeout(liveState.timer);
+      liveState.timer = setTimeout(spinUp, 500);
     }
   }
-
   function restartRecognizer() {
-    if (!state.active) return;
-    clearTimeout(state.timer);
-    state.gen++;
-    if (state.rec) { try { state.rec.abort(); } catch (e) {} state.rec = null; }
-    state.timer = setTimeout(spinUp, 220);
+    if (!liveState.active) return;
+    clearTimeout(liveState.timer);
+    liveState.gen++;
+    if (liveState.rec) { try { liveState.rec.abort(); } catch (e) {} liveState.rec = null; }
+    liveState.timer = setTimeout(spinUp, 220);
   }
 
   function drawMeter() {
-    if (!cap.analyser || !cap.data) return;
-    cap.analyser.getFloatTimeDomainData(cap.data);
+    if (!liveCap.analyser || !liveCap.data) return;
+    liveCap.analyser.getFloatTimeDomainData(liveCap.data);
     var sum = 0;
-    for (var i = 0; i < cap.data.length; i++) sum += cap.data[i] * cap.data[i];
-    var rms = Math.sqrt(sum / cap.data.length);
-    var db  = 20 * Math.log10(rms || 1e-8);
+    for (var i=0;i<liveCap.data.length;i++) sum += liveCap.data[i] * liveCap.data[i];
+    var rms = Math.sqrt(sum / liveCap.data.length);
+    var db = 20 * Math.log10(rms || 1e-8);
     var pct = Math.max(0, Math.min(100, (db + 60) / 60 * 100));
-    el.meterFill.style.width  = pct.toFixed(1) + '%';
+    el.meterFill.style.width = pct.toFixed(1) + '%';
     el.meterLabel.textContent = db > -100 ? db.toFixed(1) + ' dB' : '—';
-    cap.raf = requestAnimationFrame(drawMeter);
+    liveCap.raf = requestAnimationFrame(drawMeter);
   }
-
   function refreshOutputDevices() {
-    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-      return Promise.resolve();
-    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return Promise.resolve();
     return navigator.mediaDevices.enumerateDevices().then(function (devs) {
       var outs = devs.filter(function (d) { return d.kind === 'audiooutput'; });
-      var cur  = el.outDev.value;
+      var cur = el.outDev.value;
       el.outDev.innerHTML = '<option value="">System default</option>';
       outs.forEach(function (d, i) {
         var o = document.createElement('option');
         o.value = d.deviceId;
-        o.textContent = d.label || ('Output ' + (i + 1));
+        o.textContent = d.label || ('Output ' + (i+1));
         el.outDev.appendChild(o);
       });
       if (cur) el.outDev.value = cur;
     }).catch(function () {});
   }
-
+  function isCableLabel(label) {
+    return /cable|blackhole|loopback|virtual|vb-audio|vb-cable|soundflower|null output|monitor of/i.test(label || '');
+  }
   async function applySink() {
     if (!el.monitor.setSinkId) {
-      if (el.outDev.value) {
-        el.outDev.value = '';
-        setStatus('error', 'Device routing not supported in this browser');
-      }
+      if (el.outDev.value) { el.outDev.value = ''; setStatus('error','Device routing not supported in this browser'); }
       return;
     }
     var id = el.outDev.value;
     try {
       await el.monitor.setSinkId(id || '');
-      var opt   = el.outDev.selectedOptions[0];
+      var opt = el.outDev.selectedOptions[0];
       var label = (opt && opt.textContent) || 'System default';
       if (id && isCableLabel(label)) {
-        cap.cableMode = true;
+        liveCap.cableMode = true;
         el.loopWarn.classList.remove('show');
         el.muteIcon.className = 'fa-solid fa-volume-high';
         el.muteLabel.textContent = 'Cable (silent)';
         el.muteBtn.classList.add('live');
         setStatus('listening', 'Loopback → ' + label);
       } else {
-        cap.cableMode = false;
+        liveCap.cableMode = false;
         el.muteBtn.classList.remove('live');
-        el.muteIcon.className = cap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
-        el.muteLabel.textContent = cap.muted ? 'Muted' : 'Audible';
+        el.muteIcon.className = liveCap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+        el.muteLabel.textContent = liveCap.muted ? 'Muted' : 'Audible';
         if (id) setStatus('listening', 'Output: ' + label);
-        if (cap.wholeScreen && !cap.muted) el.loopWarn.classList.add('show');
+        if (liveCap.wholeScreen && !liveCap.muted) el.loopWarn.classList.add('show');
       }
-    } catch (err) {
-      setStatus('error', 'Cannot route to that device');
-    }
+    } catch (err) { setStatus('error','Cannot route to that device'); }
   }
 
-  /* ---------- FIXED capture: audio: true (boolean) ---------- */
+  async function requestSystemMedia() {
+    if (!window.isSecureContext) { var e0 = new Error('Insecure context'); e0.name = 'SecurityError'; throw e0; }
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getDisplayMedia !== 'function') {
+      var e1 = new Error('getDisplayMedia unavailable'); e1.name = 'NotSupportedError'; throw e1;
+    }
+    var attempts = [
+      { video:true, audio:true, selfBrowserSurface:'exclude', surfaceSwitching:'include', systemAudio:'include' },
+      { video:true, audio:true, systemAudio:'include' },
+      { video:true, audio:true }
+    ];
+    var lastErr = null;
+    for (var i=0;i<attempts.length;i++) {
+      try { return await navigator.mediaDevices.getDisplayMedia(attempts[i]); }
+      catch (err) {
+        lastErr = err;
+        if (!err || err.name !== 'TypeError') throw err;
+      }
+    }
+    throw lastErr;
+  }
+
   async function startSystemCapture() {
-    if (cap.stream) return true;
+    if (liveCap.stream) return true;
     el.sysWarn.classList.remove('show');
     el.loopWarn.classList.remove('show');
     setStatus('', 'Opening capture picker…');
@@ -1451,42 +1360,37 @@
     var actx = null;
     try {
       var AC = window.AudioContext || window.webkitAudioContext;
-      actx = new AC({ latencyHint: 'interactive' });
-      if (actx.state === 'suspended') actx.resume().catch(function () {});
+      actx = new AC({ latencyHint:'interactive' });
+      if (actx.state === 'suspended') actx.resume().catch(function(){});
     } catch (e) { actx = null; }
 
     var stream = null;
-    try {
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: true,
-        audio: true,
-        selfBrowserSurface: 'exclude',
-        surfaceSwitching: 'include',
-        systemAudio: 'include'
-      });
-    } catch (err) {
+    try { stream = await requestSystemMedia(); }
+    catch (err) {
       try { if (actx) actx.close(); } catch (x) {}
       var name = (err && err.name) || 'Error';
-      var msg  = (err && err.message) || '';
-      if (name === 'NotAllowedError' || name === 'AbortError' || name === 'PermissionDeniedError') {
+      var msg = (err && err.message) || '';
+      if (name === 'SecurityError') {
+        el.secureWarn.classList.add('show');
+        setStatus('error', 'Needs HTTPS or http://localhost — file:// won\'t work');
+      } else if (name === 'NotAllowedError' || name === 'AbortError' || name === 'PermissionDeniedError') {
         setStatus('idle', 'Share cancelled');
       } else if (name === 'NotSupportedError') {
-        setStatus('error', 'Capture not supported — use Chrome or Edge');
+        el.sysWarn.classList.add('show');
+        setStatus('error', 'System audio capture unsupported — use Chrome or Edge');
       } else if (name === 'NotFoundError') {
         setStatus('error', 'No screen/tab available to share');
       } else if (name === 'InvalidStateError') {
         setStatus('error', 'Capture already in progress elsewhere');
       } else if (name === 'TypeError') {
-        setStatus('error', 'Capture failed: TypeError (browser too old)');
+        setStatus('error', 'Capture rejected the constraints — try Chrome or Edge');
       } else {
         setStatus('error', 'Capture failed: ' + name + (msg ? ' — ' + msg.slice(0, 60) : ''));
       }
       return false;
     }
 
-    var audioTracks = stream.getAudioTracks().filter(function (t) {
-      return t.readyState === 'live';
-    });
+    var audioTracks = stream.getAudioTracks().filter(function (t) { return t.readyState === 'live'; });
     if (!audioTracks.length) {
       stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
       try { if (actx) actx.close(); } catch (e) {}
@@ -1494,36 +1398,27 @@
       setStatus('error', 'No audio — tick "Share tab audio" in the picker');
       return false;
     }
-
     try {
-      audioTracks[0].applyConstraints({
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl:  false
-      }).catch(function () {});
+      audioTracks[0].applyConstraints({ echoCancellation:false, noiseSuppression:false, autoGainControl:false }).catch(function(){});
     } catch (e) {}
 
     var vt = stream.getVideoTracks()[0];
     if (vt) {
       var s = vt.getSettings ? vt.getSettings() : {};
-      cap.wholeScreen = s.displaySurface === 'monitor';
-      try { vt.applyConstraints({ frameRate: 5 }).catch(function () {}); } catch (e) {}
+      liveCap.wholeScreen = s.displaySurface === 'monitor';
+      try { vt.applyConstraints({ frameRate:5 }).catch(function(){}); } catch (e) {}
     }
 
     var audioOnly = new MediaStream(audioTracks);
-
     el.monitor.srcObject = audioOnly;
-    el.monitor.volume    = cap.volume;
-    el.monitor.muted     = cap.muted;
-    el.resumeBtn.hidden  = true;
-
+    el.monitor.volume = liveCap.volume;
+    el.monitor.muted = liveCap.muted;
+    el.resumeBtn.hidden = true;
     try {
       await el.monitor.play();
       await new Promise(function (r) { setTimeout(r, 120); });
       if (el.monitor.paused) el.resumeBtn.hidden = false;
-    } catch (err) {
-      el.resumeBtn.hidden = false;
-    }
+    } catch (err) { el.resumeBtn.hidden = false; }
 
     var analyser = null, data = null;
     if (actx) {
@@ -1537,19 +1432,16 @@
         data = new Float32Array(analyser.fftSize);
       } catch (e) { analyser = null; }
     }
-
-    cap.stream   = stream;
-    cap.actx     = actx;
-    cap.analyser = analyser;
-    cap.data     = data;
-
+    liveCap.stream = stream;
+    liveCap.actx = actx;
+    liveCap.analyser = analyser;
+    liveCap.data = data;
     el.meterWrap.hidden = false;
-    if (analyser) drawMeter();
-    else el.meterLabel.textContent = 'n/a';
+    if (analyser) drawMeter(); else el.meterLabel.textContent = 'n/a';
 
     audioTracks[0].addEventListener('ended', function () {
       endCapture();
-      if (state.active) stopAll();
+      if (liveState.active) stopLive();
     });
 
     await refreshOutputDevices();
@@ -1559,20 +1451,18 @@
     el.shareIcon.className = 'fa-solid fa-circle-check';
     el.shareLabel.textContent = 'Capturing audio';
     el.stopShareBtn.disabled = false;
-
-    if (cap.wholeScreen && !cap.muted && !cap.cableMode) el.loopWarn.classList.add('show');
-
+    if (liveCap.wholeScreen && !liveCap.muted && !liveCap.cableMode) el.loopWarn.classList.add('show');
     setStatus('listening', 'Audio captured');
     updateSourceUI();
 
-    clearTimeout(cap.silenceTimer);
-    cap.silenceTimer = setTimeout(function () {
-      if (!cap.analyser || !cap.data || !state.active) return;
-      cap.analyser.getFloatTimeDomainData(cap.data);
+    clearTimeout(liveCap.silenceTimer);
+    liveCap.silenceTimer = setTimeout(function () {
+      if (!liveCap.analyser || !liveCap.data || !liveState.active) return;
+      liveCap.analyser.getFloatTimeDomainData(liveCap.data);
       var sum = 0;
-      for (var i = 0; i < cap.data.length; i++) sum += cap.data[i] * cap.data[i];
-      var rms = Math.sqrt(sum / cap.data.length);
-      var db  = 20 * Math.log10(rms || 1e-8);
+      for (var i=0;i<liveCap.data.length;i++) sum += liveCap.data[i]*liveCap.data[i];
+      var rms = Math.sqrt(sum / liveCap.data.length);
+      var db = 20 * Math.log10(rms || 1e-8);
       if (db < -55) setStatus('error', 'Captured but silent — is the tab playing?');
     }, 2000);
 
@@ -1580,19 +1470,16 @@
   }
 
   function endCapture(silent) {
-    cancelAnimationFrame(cap.raf);
-    cap.raf = 0;
-    clearTimeout(cap.silenceTimer);
-    if (cap.stream) {
-      cap.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
-      cap.stream = null;
+    cancelAnimationFrame(liveCap.raf); liveCap.raf = 0;
+    clearTimeout(liveCap.silenceTimer);
+    if (liveCap.stream) {
+      liveCap.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+      liveCap.stream = null;
     }
-    if (cap.actx) { try { cap.actx.close(); } catch (e) {} cap.actx = null; }
-    cap.analyser = null; cap.data = null;
-    cap.wholeScreen = false; cap.cableMode = false;
-
+    if (liveCap.actx) { try { liveCap.actx.close(); } catch (e) {} liveCap.actx = null; }
+    liveCap.analyser = null; liveCap.data = null;
+    liveCap.wholeScreen = false; liveCap.cableMode = false;
     try { el.monitor.pause(); el.monitor.srcObject = null; } catch (e) {}
-
     el.resumeBtn.hidden = true;
     el.meterFill.style.width = '0%';
     el.meterLabel.textContent = '—';
@@ -1603,169 +1490,131 @@
     el.shareLabel.textContent = 'Capture system audio';
     el.loopWarn.classList.remove('show');
     el.muteBtn.classList.remove('live');
-    el.muteIcon.className = cap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
-    el.muteLabel.textContent = cap.muted ? 'Muted' : 'Audible';
-
+    el.muteIcon.className = liveCap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+    el.muteLabel.textContent = liveCap.muted ? 'Muted' : 'Audible';
     if (!silent) setStatus('idle', 'Capture stopped');
     updateSourceUI();
   }
 
   function startTicker() {
     stopTicker();
-    state.ticker = setInterval(function () {
-      if (!state.active) return;
-      var last = state.segs[state.segs.length - 1];
-      var t = Math.max(elapsed(), last ? last.end : 0);
-      el.durationEl.textContent = short(t);
+    liveState.ticker = setInterval(function () {
+      if (!liveState.active) return;
+      var last = liveState.segs[liveState.segs.length-1];
+      el.durationEl.textContent = short(Math.max(liveElapsed(), last ? last.end : 0));
     }, 400);
   }
-
-  function stopTicker() {
-    if (state.ticker) { clearInterval(state.ticker); state.ticker = null; }
-  }
+  function stopTicker() { if (liveState.ticker) { clearInterval(liveState.ticker); liveState.ticker = null; } }
 
   function beginRecognition() {
-    if (!SR_OK || state.active) return;
+    if (!SR_OK || liveState.active) return;
     if (!window.isSecureContext) {
       el.secureWarn.classList.add('show');
       setStatus('error', 'Insecure context');
       return;
     }
-    state.active = true;
-    state.fails = 0; state.errs = 0; state.noSpeech = 0;
-    state.detCand = null; state.detStreak = 0;
+    liveState.active = true;
+    liveState.fails = 0; liveState.errs = 0; liveState.noSpeech = 0;
+    liveState.detCand = null; liveState.detStreak = 0;
     if (el.lang.value === 'auto') {
-      state.autoLang = null;
+      liveState.autoLang = null;
       var idx = SCAN_LIST.indexOf(browserLang());
-      state.scanIdx = idx >= 0 ? idx : -1;
-    } else state.autoLang = null;
+      liveState.scanIdx = idx >= 0 ? idx : -1;
+    } else liveState.autoLang = null;
     updateLangHint();
-    var last = state.segs[state.segs.length - 1];
-    state.offset  = last ? last.end + 0.3 : 0;
-    state.lastEnd = state.offset;
-    state.t0      = performance.now();
+    var last = liveState.segs[liveState.segs.length-1];
+    liveState.offset = last ? last.end + 0.3 : 0;
+    liveState.lastEnd = liveState.offset;
+    liveState.t0 = performance.now();
     setStatus('', 'Starting…');
-    spinUp();
-    startTicker();
-    refreshButtons();
+    spinUp(); startTicker(); refreshButtons();
   }
-
-  function start() {
-    if (state.active) return;
-    if (el.source.value === 'system' && !cap.stream) {
+  function startLive() {
+    if (liveState.active) return;
+    if (el.source.value === 'system' && !liveCap.stream) {
       setStatus('', 'Waiting for audio share…');
       startSystemCapture().then(function (ok) { if (ok) beginRecognition(); });
       return;
     }
     beginRecognition();
   }
-
-  function stopAll() {
-    state.active = false;
-    state.gen++;
-    clearTimeout(state.timer);
+  function stopLive() {
+    liveState.active = false;
+    liveState.gen++;
+    clearTimeout(liveState.timer);
     stopTicker();
-    if (state.rec) { try { state.rec.abort(); } catch (e) {} state.rec = null; }
+    if (liveState.rec) { try { liveState.rec.abort(); } catch (e) {} liveState.rec = null; }
     el.subInterim.textContent = '';
     el.stage.classList.remove('listening');
     setStatus('idle', 'Stopped');
-    updateSourceUI();
-    refreshButtons();
+    updateSourceUI(); refreshButtons();
   }
 
-  function cueBody(seg) { return seg.text + (seg.tr ? '\n' + seg.tr : ''); }
-
-  function buildSRT() {
-    return '\uFEFF' + state.segs.map(function (s, i) {
-      var a = ts(Math.max(0, s.start), ',');
-      var b = ts(Math.max(s.end, s.start + 0.6), ',');
-      return (i + 1) + '\n' + a + ' --> ' + b + '\n' + cueBody(s) + '\n';
+  function liveCueBody(seg) { return seg.text + (seg.tr ? '\n' + seg.tr : ''); }
+  function buildLiveSRT() {
+    return '\uFEFF' + liveState.segs.map(function (s,i) {
+      var a = srtTime(Math.max(0, s.start));
+      var b = srtTime(Math.max(s.end, s.start + 0.6));
+      return (i+1) + '\n' + a + ' --> ' + b + '\n' + liveCueBody(s) + '\n';
     }).join('\n');
   }
-
-  function buildVTT() {
-    var body = state.segs.map(function (s, i) {
-      var a = ts(Math.max(0, s.start), '.');
-      var b = ts(Math.max(s.end, s.start + 0.6), '.');
-      return (i + 1) + '\n' + a + ' --> ' + b + '\n' + cueBody(s) + '\n';
+  function buildLiveVTT() {
+    var body = liveState.segs.map(function (s,i) {
+      var a = vttTime(Math.max(0, s.start));
+      var b = vttTime(Math.max(s.end, s.start + 0.6));
+      return (i+1) + '\n' + a + ' --> ' + b + '\n' + liveCueBody(s) + '\n';
     }).join('\n');
     return 'WEBVTT\n\n' + body;
   }
-
-  function buildTXT() {
-    return state.segs.map(function (s) {
+  function buildLiveTXT() {
+    return liveState.segs.map(function (s) {
       return '[' + short(s.start) + '] ' + s.text + (s.tr ? '\n          ' + s.tr : '');
     }).join('\n');
   }
 
-  function download(filename, content, mime) {
-    var blob = new Blob([content], { type: (mime || 'text/plain') + ';charset=utf-8' });
-    var url  = URL.createObjectURL(blob);
-    var a    = document.createElement('a');
-    a.href = url; a.download = filename;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(function () { URL.revokeObjectURL(url); }, 1500);
-  }
-
-  /* ---------- Events ---------- */
+  /* live events */
   el.source.addEventListener('change', function () {
-    try { localStorage.setItem('ac.source', el.source.value); } catch (e) {}
-    if (el.source.value === 'mic' && cap.stream) endCapture(true);
+    if (el.source.value === 'mic' && liveCap.stream) endCapture(true);
     updateSourceUI();
-    if (state.active) {
-      if (el.source.value === 'system' && !cap.stream) { stopAll(); start(); }
+    if (liveState.active) {
+      if (el.source.value === 'system' && !liveCap.stream) { stopLive(); startLive(); }
       else restartRecognizer();
     }
   });
-
   el.shareBtn.addEventListener('click', function () {
-    if (cap.stream) endCapture(true);
-    startSystemCapture().then(function (ok) { if (ok && !state.active) beginRecognition(); });
+    if (liveCap.stream) endCapture(true);
+    startSystemCapture().then(function (ok) { if (ok && !liveState.active) beginRecognition(); });
   });
-
-  el.stopShareBtn.addEventListener('click', function () {
-    endCapture();
-    if (state.active) stopAll();
+  el.stopShareBtn.addEventListener('click', function () { endCapture(); if (liveState.active) stopLive(); });
+  el.resumeBtn.addEventListener('click', async function () {
+    try {
+      if (liveCap.actx && liveCap.actx.state === 'suspended') await liveCap.actx.resume();
+      await el.monitor.play();
+      el.resumeBtn.hidden = true;
+    } catch (err) { setStatus('error', 'Audio unlock failed: ' + (err && err.name)); }
   });
-
-  el.resumeBtn.addEventListener('click', function () {
-    (async function () {
-      try {
-        if (cap.actx && cap.actx.state === 'suspended') await cap.actx.resume();
-        await el.monitor.play();
-        el.resumeBtn.hidden = true;
-      } catch (err) {
-        setStatus('error', 'Audio unlock failed: ' + (err && err.name));
-      }
-    })();
-  });
-
   el.volRange.addEventListener('input', function () {
-    cap.volume = Number(el.volRange.value) / 100;
-    el.monitor.volume = cap.volume;
+    liveCap.volume = Number(el.volRange.value) / 100;
+    el.monitor.volume = liveCap.volume;
     el.volLabel.textContent = el.volRange.value + '%';
   });
-
   el.muteBtn.addEventListener('click', function () {
-    if (cap.cableMode) { setStatus('error', 'Cable mode is always silent'); return; }
-    cap.muted = !cap.muted;
-    el.monitor.muted = cap.muted;
-    el.muteIcon.className = cap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
-    el.muteLabel.textContent = cap.muted ? 'Muted' : 'Audible';
-    el.muteBtn.classList.toggle('live', cap.muted);
-    if (cap.muted) el.loopWarn.classList.remove('show');
-    else if (cap.wholeScreen && cap.stream && !cap.cableMode) el.loopWarn.classList.add('show');
+    if (liveCap.cableMode) { setStatus('error', 'Cable mode is always silent'); return; }
+    liveCap.muted = !liveCap.muted;
+    el.monitor.muted = liveCap.muted;
+    el.muteIcon.className = liveCap.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+    el.muteLabel.textContent = liveCap.muted ? 'Muted' : 'Audible';
+    el.muteBtn.classList.toggle('live', liveCap.muted);
+    if (liveCap.muted) el.loopWarn.classList.remove('show');
+    else if (liveCap.wholeScreen && liveCap.stream && !liveCap.cableMode) el.loopWarn.classList.add('show');
   });
-
-  el.outDev.addEventListener('change', function () { applySink(); });
-
-  el.startBtn.addEventListener('click', start);
-  el.stopBtn.addEventListener('click', function () { if (state.active) stopAll(); });
-
+  el.outDev.addEventListener('change', applySink);
+  el.startBtn.addEventListener('click', startLive);
+  el.stopBtn.addEventListener('click', function () { if (liveState.active) stopLive(); });
   el.clearBtn.addEventListener('click', function () {
-    stopAll();
-    state.segs = []; state.offset = 0; state.lastEnd = 0;
-    state.autoLang = null; state.detCand = null; state.detStreak = 0;
+    stopLive();
+    liveState.segs = []; liveState.offset = 0; liveState.lastEnd = 0;
+    liveState.autoLang = null; liveState.detCand = null; liveState.detStreak = 0;
     el.cueList.innerHTML = '';
     el.subFinal.textContent = 'Press “Start listening” and begin speaking…';
     el.subFinal.classList.add('placeholder');
@@ -1773,27 +1622,12 @@
     el.subInterim.textContent = '';
     updateEmptyState(); updateLangHint(); refreshStats(); refreshButtons();
   });
-
-  el.srtBtn.addEventListener('click', function () {
-    if (!state.segs.length) return;
-    download('captions_' + stamp() + '.srt', buildSRT(), 'application/x-subrip');
-  });
-
-  el.vttBtn.addEventListener('click', function () {
-    if (!state.segs.length) return;
-    download('captions_' + stamp() + '.vtt', buildVTT(), 'text/vtt');
-  });
-
-  el.txtBtn.addEventListener('click', function () {
-    if (!state.segs.length) return;
-    download('captions_' + stamp() + '.txt', buildTXT(), 'text/plain');
-  });
-
+  el.srtBtn.addEventListener('click', function () { if (liveState.segs.length) downloadBlob('live_' + fileStamp() + '.srt', buildLiveSRT(), 'application/x-subrip'); });
+  el.vttBtn.addEventListener('click', function () { if (liveState.segs.length) downloadBlob('live_' + fileStamp() + '.vtt', buildLiveVTT(), 'text/vtt'); });
+  el.txtBtn.addEventListener('click', function () { if (liveState.segs.length) downloadBlob('live_' + fileStamp() + '.txt', buildLiveTXT(), 'text/plain'); });
   el.copyBtn.addEventListener('click', function () {
-    if (!state.segs.length) return;
-    var text = state.segs.map(function (s) {
-      return s.text + (s.tr ? '\n' + s.tr : '');
-    }).join('\n');
+    if (!liveState.segs.length) return;
+    var text = liveState.segs.map(function (s) { return s.text + (s.tr ? '\n' + s.tr : ''); }).join('\n');
     var done = function () {
       var old = el.copyBtn.innerHTML;
       el.copyBtn.innerHTML = '<i class="fa-solid fa-circle-check"></i><span>Copied!</span>';
@@ -1803,69 +1637,54 @@
       navigator.clipboard.writeText(text).then(done).catch(function () {});
     } else {
       var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
       document.body.appendChild(ta); ta.select();
       try { document.execCommand('copy'); done(); } catch (e) {}
       ta.remove();
     }
   });
-
   el.chip.addEventListener('click', function () {
     if (el.lang.value !== 'auto') return;
-    state.autoLang = null; state.scanIdx = -1;
-    state.detCand = null; state.detStreak = 0;
-    updateLangHint();
-    flashChip('Reset to browser language');
-    restartRecognizer();
+    liveState.autoLang = null; liveState.scanIdx = -1;
+    liveState.detCand = null; liveState.detStreak = 0;
+    updateLangHint(); flashChip('Reset to browser language'); restartRecognizer();
   });
-
   el.lang.addEventListener('change', function () {
-    try { localStorage.setItem('ac.lang', el.lang.value); } catch (e) {}
-    state.autoLang = null; state.scanIdx = -1;
-    state.detCand = null; state.detStreak = 0; state.noSpeech = 0;
+    liveState.autoLang = null; liveState.scanIdx = -1;
+    liveState.detCand = null; liveState.detStreak = 0; liveState.noSpeech = 0;
     if (el.lang.value === 'auto') {
       var idx = SCAN_LIST.indexOf(browserLang());
-      state.scanIdx = idx >= 0 ? idx : -1;
+      liveState.scanIdx = idx >= 0 ? idx : -1;
     }
     updateLangHint();
-    if (state.active) restartRecognizer();
+    if (liveState.active) restartRecognizer();
   });
-
   el.trLang.addEventListener('change', function () {
-    state.trOn = !!el.trLang.value;
-    try { localStorage.setItem('ac.trLang', el.trLang.value); } catch (e) {}
-    if (!state.trOn) {
-      state.segs.forEach(function (s) { s.tr = ''; paintRow(s); });
+    liveState.trOn = !!el.trLang.value;
+    if (!liveState.trOn) {
+      liveState.segs.forEach(function (s) { s.tr = ''; livePaint(s); });
       updateSubs();
     } else {
-      state.segs.forEach(function (s) { s.tr = ''; paintRow(s); translateSeg(s); });
+      liveState.segs.forEach(function (s) { s.tr = ''; livePaint(s); translateSeg(s); });
     }
   });
-
   document.addEventListener('keydown', function (e) {
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
       e.preventDefault();
-      if (state.active) stopAll(); else start();
+      if (currentTab !== 'live') return;
+      if (liveState.active) stopLive(); else startLive();
     }
   });
-
   el.fsBtn.addEventListener('click', function () {
     if (!document.fullscreenElement) {
-      if (el.stage.requestFullscreen) el.stage.requestFullscreen().catch(function () {});
-    } else if (document.exitFullscreen) {
-      document.exitFullscreen().catch(function () {});
-    }
+      if (el.stage.requestFullscreen) el.stage.requestFullscreen().catch(function(){});
+    } else if (document.exitFullscreen) document.exitFullscreen().catch(function(){});
   });
-
   document.addEventListener('fullscreenchange', function () {
-    el.fsIcon.className = document.fullscreenElement
-      ? 'fa-solid fa-compress'
-      : 'fa-solid fa-expand';
+    el.fsIcon.className = document.fullscreenElement ? 'fa-solid fa-compress' : 'fa-solid fa-expand';
     el.fsBtn.title = document.fullscreenElement ? 'Exit fullscreen' : 'Fullscreen';
   });
 
-  /* ---------- Optional media file ---------- */
   function loadMedia(file) {
     if (!file) return;
     if (!/^(audio|video)\//.test(file.type)) return;
@@ -1876,90 +1695,688 @@
     el.clearMedia.disabled = false;
     el.player.load();
   }
-
-  el.mediaFile.addEventListener('change', function (e) {
-    loadMedia(e.target.files && e.target.files[0]);
-  });
-
+  el.mediaFile.addEventListener('change', function (e) { loadMedia(e.target.files && e.target.files[0]); });
   el.clearMedia.addEventListener('click', function () {
     if (el.player.src) URL.revokeObjectURL(el.player.src);
-    el.player.removeAttribute('src');
-    el.player.load();
-    el.player.hidden = true;
-    el.placeholder.style.display = '';
-    el.clearMedia.disabled = true;
-    el.mediaFile.value = '';
+    el.player.removeAttribute('src'); el.player.load();
+    el.player.hidden = true; el.placeholder.style.display = '';
+    el.clearMedia.disabled = true; el.mediaFile.value = '';
   });
-
-  ['dragenter', 'dragover'].forEach(function (name) {
-    el.stage.addEventListener(name, function (e) {
-      e.preventDefault();
-      el.stage.style.borderColor = 'var(--accent)';
-    });
+  ['dragenter','dragover'].forEach(function (n) {
+    el.stage.addEventListener(n, function (e) { e.preventDefault(); el.stage.style.borderColor = 'var(--accent)'; });
   });
-  ['dragleave', 'drop'].forEach(function (name) {
-    el.stage.addEventListener(name, function (e) {
-      e.preventDefault();
-      el.stage.style.borderColor = '';
-    });
+  ['dragleave','drop'].forEach(function (n) {
+    el.stage.addEventListener(n, function (e) { e.preventDefault(); el.stage.style.borderColor = ''; });
   });
   el.stage.addEventListener('drop', function (e) {
     var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
     if (f) loadMedia(f);
   });
 
-  var lastPageLang = pageTargetLang();
-  setInterval(function () {
-    if (el.trLang.value !== 'auto') return;
-    var now = pageTargetLang();
-    if (now !== lastPageLang) {
-      lastPageLang = now;
-      state.segs.forEach(function (s) { s.tr = ''; paintRow(s); translateSeg(s); });
-    }
-  }, 1600);
+  /* live init */
+  updateSourceUI(); refreshButtons(); refreshStats(); updateEmptyState(); updateSubs(); updateLangHint();
+  setStatus('idle', 'Idle');
+  refreshOutputDevices();
 
-  window.addEventListener('beforeunload', function () {
-    state.active = false;
-    state.gen++;
-    stopTicker();
-    clearTimeout(state.timer);
-    if (state.rec) { try { state.rec.abort(); } catch (e) {} }
-    if (cap.stream) cap.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
-    if (el.player.src) URL.revokeObjectURL(el.player.src);
-  });
 
-  try {
-    var savedSource = localStorage.getItem('ac.source');
-    if (savedSource === 'system' || savedSource === 'mic') el.source.value = savedSource;
-    var savedLang = localStorage.getItem('ac.lang');
-    if (savedLang !== null && el.lang.querySelector('option[value="' + savedLang + '"]')) {
-      el.lang.value = savedLang;
-    }
-    var savedTr = localStorage.getItem('ac.trLang');
-    if (savedTr !== null) {
-      var opt = el.trLang.querySelector('option[value="' + savedTr + '"]');
-      if (opt) el.trLang.value = savedTr;
-    }
-  } catch (e) {}
+  /* ============================================================
+     ============================================================
+     FILE MODE (in-browser Whisper via @xenova/transformers)
+     ============================================================
+     ============================================================ */
+  var fileEl = {
+    panel: $('filePanel'),
+    drop: $('dropZone'),
+    input: $('fileInput'),
+    info: $('fileInfo'),
+    name: $('fileName'),
+    meta: $('fileMeta'),
+    model: $('whisperModel'),
+    lang: $('whisperLang'),
+    transcribeBtn: $('transcribeBtn'),
+    cancelBtn: $('cancelTranscribeBtn'),
+    progressTrack: $('progressTrack'),
+    progressFill: $('progressFill'),
+    status: $('fileStatus'),
+    statusText: $('fileStatusText'),
+    previewCard: $('previewCard'),
+    stage: $('fileStage'),
+    player: $('filePlayer'),
+    karaoke: $('karaokeLayer'),
+    transcriptCard: $('fileTranscriptCard'),
+    transcript: $('fileTranscript'),
+    assCard: $('assCard'),
+    exportCard: $('exportCard'),
+    assBtn: $('assBtn'),
+    srtBtn: $('srtBtnFile'),
+    vttBtn: $('vttBtnFile'),
+    txtBtn: $('txtBtnFile'),
+    jsonBtn: $('jsonBtnFile'),
+    /* ASS options */
+    wpc: $('assWpc'), font: $('assFont'), fs: $('assFs'),
+    active: $('assActive'), inactive: $('assInactive'), outline: $('assOutline'),
+    bord: $('assBord'), marginV: $('assMarginV'), marginLR: $('assMarginLR'),
+    playres: $('assPlayres'),
+    popIn: $('assPopIn'), popOut: $('assPopOut'),
+    popExtra: $('assPopExtra'), popBlur: $('assPopBlur'),
+    tailHold: $('assTailHold'), uppercase: $('assUppercase')
+  };
 
-  state.trOn = !!el.trLang.value;
+  var fileState = {
+    file: null,
+    fileURL: null,
+    audioFloat32: null,
+    words: [],
+    blocks: [],
+    segments: [],
+    transcriberWorker: null,
+    busy: false,
+    lastRenderKey: '',
+    cancelRequested: false,
+    karaokeRAF: 0
+  };
 
-  if (el.lang.value === 'auto') {
-    var idx0 = SCAN_LIST.indexOf(browserLang());
-    state.scanIdx = idx0 >= 0 ? idx0 : -1;
+  function setFileStatus(kind, text) {
+    fileEl.status.className = 'status' + (kind ? ' ' + kind : '');
+    fileEl.statusText.textContent = text;
+  }
+  function setFileProgress(pct) {
+    if (pct <= 0) { fileEl.progressTrack.hidden = true; fileEl.progressFill.style.width = '0%'; return; }
+    fileEl.progressTrack.hidden = false;
+    fileEl.progressFill.style.width = Math.max(0, Math.min(100, pct)) + '%';
+  }
+  function humanSize(bytes) {
+    if (!bytes) return '0 B';
+    var units = ['B','KB','MB','GB'];
+    var i = 0;
+    while (bytes >= 1024 && i < units.length - 1) { bytes /= 1024; i++; }
+    return bytes.toFixed(bytes >= 100 || i === 0 ? 0 : 1) + ' ' + units[i];
   }
 
-  cap.volume = Number(el.volRange.value) / 100;
-  el.volLabel.textContent = el.volRange.value + '%';
+  /* ------------ Whisper worker ------------ */
+  function createTranscriberWorker() {
+    var code = [
+      "import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2';",
+      "env.allowLocalModels = false;",
+      "env.useBrowserCache = true;",
+      "let transcriber = null;",
+      "let currentModel = null;",
+      "self.onmessage = async (e) => {",
+      "  const { id, type, audio, model, language } = e.data;",
+      "  if (type !== 'transcribe') return;",
+      "  try {",
+      "    if (!transcriber || currentModel !== model) {",
+      "      self.postMessage({ id, type: 'status', status: 'loading' });",
+      "      transcriber = await pipeline('automatic-speech-recognition', model, {",
+      "        progress_callback: (p) => self.postMessage({ id, type: 'progress', data: p })",
+      "      });",
+      "      currentModel = model;",
+      "    }",
+      "    self.postMessage({ id, type: 'status', status: 'transcribing' });",
+      "    const result = await transcriber(audio, {",
+      "      chunk_length_s: 30,",
+      "      stride_length_s: 5,",
+      "      return_timestamps: 'word',",
+      "      language: language || undefined,",
+      "      task: 'transcribe'",
+      "    });",
+      "    self.postMessage({ id, type: 'result', result });",
+      "  } catch (err) {",
+      "    self.postMessage({ id, type: 'error', error: String((err && (err.stack || err.message)) || err) });",
+      "  }",
+      "};"
+    ].join('\n');
+    var blob = new Blob([code], { type: 'application/javascript' });
+    var url = URL.createObjectURL(blob);
+    try { return new Worker(url, { type: 'module' }); }
+    catch (e) { console.warn('Module worker failed, falling back to main thread:', e); return null; }
+  }
 
-  refreshOutputDevices();
-  updateSourceUI();
-  refreshButtons();
-  refreshStats();
-  updateEmptyState();
-  updateSubs();
-  updateLangHint();
-  setStatus('idle', 'Idle');
+  async function transcribeViaWorker(audioFloat32, model, language) {
+    if (!fileState.transcriberWorker) {
+      fileState.transcriberWorker = createTranscriberWorker();
+    }
+    if (!fileState.transcriberWorker) {
+      throw new Error('Web Worker unavailable — try a modern Chrome/Edge');
+    }
+    var worker = fileState.transcriberWorker;
+    var id = Math.random().toString(36).slice(2);
+    return new Promise(function (resolve, reject) {
+      function handler(e) {
+        if (!e.data || e.data.id !== id) return;
+        var t = e.data.type;
+        if (t === 'status') {
+          if (e.data.status === 'loading') setFileStatus('', 'Loading model…');
+          else if (e.data.status === 'transcribing') { setFileStatus('listening', 'Transcribing…'); setFileProgress(100); }
+        } else if (t === 'progress') {
+          var p = e.data.data;
+          if (p && p.status === 'progress' && typeof p.progress === 'number') {
+            var file = p.file ? p.file.split('/').pop() : '';
+            setFileStatus('', 'Downloading ' + file + ' · ' + p.progress.toFixed(0) + '%');
+            setFileProgress(p.progress);
+          } else if (p && p.status === 'initiate' && p.file) {
+            setFileStatus('', 'Preparing ' + p.file.split('/').pop() + '…');
+          } else if (p && p.status === 'done') {
+            /* individual file done */
+          }
+        } else if (t === 'result') {
+          worker.removeEventListener('message', handler);
+          resolve(e.data.result);
+        } else if (t === 'error') {
+          worker.removeEventListener('message', handler);
+          reject(new Error(e.data.error));
+        }
+      }
+      worker.addEventListener('message', handler);
+      /* Send a copy — don't transfer, so we can retry if the worker crashes */
+      worker.postMessage({ id: id, type: 'transcribe', audio: audioFloat32, model: model, language: language });
+    });
+  }
+
+  /* ------------ Audio decoding to 16 kHz mono Float32Array ------------ */
+  async function decodeTo16kMono(blob) {
+    var arrayBuf = await blob.arrayBuffer();
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) throw new Error('AudioContext not supported');
+    var ctx = new AC();
+    var decoded;
+    try { decoded = await ctx.decodeAudioData(arrayBuf.slice(0)); }
+    finally { try { ctx.close(); } catch (e) {} }
+    var sr = 16000;
+    var frames = Math.ceil(decoded.duration * sr);
+    var off = new OfflineAudioContext(1, frames, sr);
+    var src = off.createBufferSource();
+    src.buffer = decoded;
+    src.connect(off.destination);
+    src.start();
+    var rendered = await off.startRendering();
+    return rendered.getChannelData(0);
+  }
+
+  /* ------------ Whisper result normalisation ------------ */
+  function normalizeWhisperResult(result) {
+    var chunks = (result && result.chunks) || [];
+    var words = [];
+    for (var i=0;i<chunks.length;i++) {
+      var c = chunks[i];
+      var w = String(c.text || '').trim();
+      if (!w) continue;
+      var ts = c.timestamp || [0, 0];
+      var s = Number(ts[0]);
+      var e = Number(ts[1]);
+      if (!isFinite(s)) s = 0;
+      if (!isFinite(e) || e <= s) e = s + 0.3;
+      words.push({ word: w, start: s, end: e });
+    }
+    /* Sanitise overlaps */
+    for (var j=0;j<words.length;j++) {
+      if (words[j].end <= words[j].start) words[j].end = words[j].start + 0.3;
+      if (j > 0 && words[j].start < words[j-1].end) words[j].start = words[j-1].end;
+    }
+    return words;
+  }
+
+  /* ------------ Grouping ------------ */
+  function buildBlocks(words, wpc) {
+    var blocks = [];
+    for (var i=0;i<words.length;i+=wpc) {
+      var chunk = words.slice(i, i+wpc);
+      if (!chunk.length) break;
+      blocks.push({
+        start: chunk[0].start,
+        end: chunk[chunk.length-1].end,
+        words: chunk
+      });
+    }
+    return blocks;
+  }
+  function buildSrtSegments(words, maxWords) {
+    maxWords = maxWords || 7;
+    var segs = [];
+    var cur = [];
+    for (var i=0;i<words.length;i++) {
+      var w = words[i];
+      cur.push(w);
+      var endsPunct = /[.!?…।。？！]$/.test(w.word);
+      if (cur.length >= maxWords || endsPunct) {
+        segs.push({
+          start: cur[0].start,
+          end: cur[cur.length-1].end,
+          text: cur.map(function(x){return x.word;}).join(' ').replace(/\s+/g,' ').trim()
+        });
+        cur = [];
+      }
+    }
+    if (cur.length) {
+      segs.push({
+        start: cur[0].start,
+        end: cur[cur.length-1].end,
+        text: cur.map(function(x){return x.word;}).join(' ').replace(/\s+/g,' ').trim()
+      });
+    }
+    return segs;
+  }
+
+  /* ============================================================
+     ASS generator — direct JS port of the Python build_ass
+     ============================================================ */
+  function toAssTime(t) {
+    var cs = Math.round(t * 100);
+    var h = Math.floor(cs / 360000);
+    var m = Math.floor((cs / 6000)) % 60;
+    var s = Math.floor((cs / 100)) % 60;
+    var c = cs % 100;
+    return h + ':' + pad(m) + ':' + pad(s) + '.' + pad(c);
+  }
+  function escAss(s) {
+    return String(s).replace(/\\/g, '\\\\').replace(/\{/g, '\\{').replace(/\}/g, '\\}');
+  }
+  function rgbToAssHex(rgb) {
+    rgb = String(rgb).replace('#', '');
+    var r = parseInt(rgb.substr(0,2), 16) || 0;
+    var g = parseInt(rgb.substr(2,2), 16) || 0;
+    var b = parseInt(rgb.substr(4,2), 16) || 0;
+    function hx(n) { var x = n.toString(16).toUpperCase(); return x.length < 2 ? '0' + x : x; }
+    return '00' + hx(b) + hx(g) + hx(r);
+  }
+  function bbggrr(rgb) {
+    rgb = String(rgb).replace('#', '');
+    var r = parseInt(rgb.substr(0,2), 16) || 0;
+    var g = parseInt(rgb.substr(2,2), 16) || 0;
+    var b = parseInt(rgb.substr(4,2), 16) || 0;
+    function hx(n) { var x = n.toString(16).toUpperCase(); return x.length < 2 ? '0' + x : x; }
+    return hx(b) + hx(g) + hx(r);
+  }
+
+  function assHeader(opts) {
+    return '[Script Info]\n' +
+      'ScriptType: v4.00+\n' +
+      'PlayResX: ' + opts.playresX + '\n' +
+      'PlayResY: ' + opts.playresY + '\n' +
+      'WrapStyle: 2\n' +
+      'ScaledBorderAndShadow: yes\n' +
+      'YCbCr Matrix: TV.709\n' +
+      '\n' +
+      '[V4+ Styles]\n' +
+      'Style: Cap,' + opts.font + ',' + opts.fs + ',&H' + rgbToAssHex(opts.inactive) + ',&H' + rgbToAssHex(opts.inactive) + ',&H' + rgbToAssHex(opts.outline) + ',&H64000000,-1,0,0,0,100,100,0,0,1,' + opts.bord + ',0,2,' + opts.marginLR + ',' + opts.marginLR + ',' + opts.marginV + ',1\n' +
+      '\n' +
+      '[Events]\n' +
+      'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n';
+  }
+
+  function buildLineText(blockWords, activeIdx, opts) {
+    var parts = ['{\\q2}{\\fsp2}'];
+    var activeColor = bbggrr(opts.active);
+    var inactiveColor = bbggrr(opts.inactive);
+    var t1 = Math.max(0, opts.popInMs);
+    var t2 = Math.max(t1, opts.popOutMs);
+    for (var i=0;i<blockWords.length;i++) {
+      var raw = String(blockWords[i].word);
+      var txt = opts.uppercase ? raw.toUpperCase() : raw;
+      if (i === activeIdx) {
+        var tag = '{\\rCap\\1c&H' + activeColor + '&\\bord' + opts.bord + '\\blur0';
+        if (t1 > 0) tag += '\\t(0,' + t1 + ',\\bord' + (opts.bord + opts.popOutlineExtra) + '\\blur' + opts.popBlur + ')';
+        if (t2 > t1) tag += '\\t(' + t1 + ',' + t2 + ',\\bord' + opts.bord + '\\blur0)';
+        tag += '}';
+        parts.push(tag + escAss(txt));
+      } else {
+        parts.push('{\\rCap\\1c&H' + inactiveColor + '&\\bord' + opts.bord + '\\blur0}' + escAss(txt));
+      }
+      if (i !== blockWords.length - 1) parts.push(' ');
+    }
+    return parts.join('');
+  }
+
+  function buildAss(words, opts) {
+    var lines = [assHeader(opts)];
+    var i = 0;
+    var n = words.length;
+    var wpc = Math.max(1, opts.wpc | 0);
+    while (i < n) {
+      var j = Math.min(i + wpc, n);
+      var block = words.slice(i, j);
+      var blockEnd = block[block.length-1].end;
+      for (var k=0;k<block.length;k++) {
+        var w = block[k];
+        var start = w.start;
+        var holdEnd = (k < block.length - 1) ? block[k+1].start : blockEnd + opts.tailHold;
+        if (holdEnd <= start) holdEnd = Math.max(start + 0.01, w.end);
+        var durMs = Math.round((holdEnd - start) * 1000);
+        var tIn = Math.min(opts.popInMs, Math.max(0, durMs - 10));
+        var tOut = Math.min(opts.popOutMs, Math.max(tIn, durMs));
+        var text = buildLineText(block, k, opts);
+        lines.push('Dialogue: 0,' + toAssTime(start) + ',' + toAssTime(holdEnd) + ',Cap,,0,0,0,,' + text + '\n');
+      }
+      i = j;
+    }
+    return lines.join('');
+  }
+
+  function readAssOptions() {
+    var pr = String(fileEl.playres.value || '1080x1920').split('x');
+    var px = Math.max(1, parseInt(pr[0], 10) || 1080);
+    var py = Math.max(1, parseInt(pr[1], 10) || 1920);
+    return {
+      wpc: Math.max(1, Math.min(10, parseInt(fileEl.wpc.value, 10) || 3)),
+      font: fileEl.font.value || 'Montserrat',
+      fs: Math.max(8, parseInt(fileEl.fs.value, 10) || 72),
+      bord: Math.max(0, parseInt(fileEl.bord.value, 10) || 0),
+      marginV: Math.max(0, parseInt(fileEl.marginV.value, 10) || 0),
+      marginLR: Math.max(0, parseInt(fileEl.marginLR.value, 10) || 0),
+      playresX: px,
+      playresY: py,
+      active: fileEl.active.value || '#FFB117',
+      inactive: fileEl.inactive.value || '#FFFFFF',
+      outline: fileEl.outline.value || '#000000',
+      uppercase: !!fileEl.uppercase.checked,
+      tailHold: Math.max(0, parseFloat(fileEl.tailHold.value) || 0),
+      popInMs: Math.max(0, parseInt(fileEl.popIn.value, 10) || 0),
+      popOutMs: Math.max(0, parseInt(fileEl.popOut.value, 10) || 0),
+      popOutlineExtra: Math.max(0, parseInt(fileEl.popExtra.value, 10) || 0),
+      popBlur: Math.max(0, parseFloat(fileEl.popBlur.value) || 0)
+    };
+  }
+
+  /* ============================================================
+     FILE MODE — karaoke preview
+     ============================================================ */
+  function updateKaraokeFont() {
+    var w = fileEl.stage.clientWidth || 640;
+    var h = fileEl.stage.clientHeight || 360;
+    var base = Math.min(w, h);
+    var fs = Math.max(14, Math.round(base * 0.06));
+    fileEl.karaoke.style.fontSize = fs + 'px';
+  }
+
+  function renderKaraokeAt(t) {
+    if (!fileState.blocks.length) { fileEl.karaoke.innerHTML = ''; return; }
+    var blocks = fileState.blocks;
+    /* Find containing block */
+    var blockIdx = -1;
+    for (var i=0;i<blocks.length;i++) {
+      var b = blocks[i];
+      var next = blocks[i+1];
+      var endAt = next ? Math.min(b.end + 0.4, next.start) : b.end + 0.4;
+      if (t >= b.start && t < endAt) { blockIdx = i; break; }
+    }
+    if (blockIdx === -1) {
+      if (fileState.lastRenderKey !== '') { fileEl.karaoke.innerHTML = ''; fileState.lastRenderKey = ''; }
+      return;
+    }
+    var block = blocks[blockIdx];
+    var activeIdx = -1;
+    for (var k=0;k<block.words.length;k++) {
+      if (t >= block.words[k].start) activeIdx = k;
+      if (t < block.words[k].end) { activeIdx = k; break; }
+    }
+    if (t >= block.words[block.words.length-1].end) activeIdx = block.words.length - 1;
+
+    var key = blockIdx + ':' + activeIdx;
+    if (key === fileState.lastRenderKey) return;
+    fileState.lastRenderKey = key;
+
+    var line = document.createElement('div');
+    line.className = 'karaoke-line';
+    for (var m=0;m<block.words.length;m++) {
+      var span = document.createElement('span');
+      span.className = 'kw' + (m === activeIdx ? ' active' : '');
+      span.textContent = block.words[m].word;
+      line.appendChild(span);
+      if (m < block.words.length - 1) line.appendChild(document.createTextNode(' '));
+    }
+    fileEl.karaoke.innerHTML = '';
+    fileEl.karaoke.appendChild(line);
+  }
+
+  function startKaraokeLoop() {
+    cancelAnimationFrame(fileState.karaokeRAF);
+    function tick() {
+      var v = fileEl.player;
+      if (!v.hidden && v.readyState >= 2) {
+        renderKaraokeAt(v.currentTime);
+      }
+      fileState.karaokeRAF = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+
+  /* ============================================================
+     FILE MODE — transcript rendering
+     ============================================================ */
+  function renderFileTranscript() {
+    fileEl.transcript.innerHTML = '';
+    if (!fileState.segments.length) {
+      fileEl.transcript.innerHTML = '<div class="empty">No segments.</div>';
+      return;
+    }
+    for (var i=0;i<fileState.segments.length;i++) {
+      var s = fileState.segments[i];
+      var row = document.createElement('div');
+      row.className = 'seg';
+      var time = document.createElement('span');
+      time.className = 'seg-time';
+      time.textContent = short(s.start) + ' → ' + short(s.end);
+      var wrap = document.createElement('span');
+      wrap.className = 'seg-text';
+      wrap.textContent = s.text;
+      row.appendChild(time); row.appendChild(wrap);
+      fileEl.transcript.appendChild(row);
+    }
+  }
+
+  /* ============================================================
+     FILE MODE — export builders
+     ============================================================ */
+  function buildFileSRT() {
+    return '\uFEFF' + fileState.segments.map(function (s, i) {
+      var a = srtTime(Math.max(0, s.start));
+      var b = srtTime(Math.max(s.end, s.start + 0.3));
+      return (i+1) + '\n' + a + ' --> ' + b + '\n' + s.text + '\n';
+    }).join('\n');
+  }
+  function buildFileVTT() {
+    var body = fileState.segments.map(function (s, i) {
+      var a = vttTime(Math.max(0, s.start));
+      var b = vttTime(Math.max(s.end, s.start + 0.3));
+      return (i+1) + '\n' + a + ' --> ' + b + '\n' + s.text + '\n';
+    }).join('\n');
+    return 'WEBVTT\n\n' + body;
+  }
+  function buildFileTXT() {
+    return fileState.segments.map(function (s) {
+      return '[' + short(s.start) + '] ' + s.text;
+    }).join('\n');
+  }
+  function buildFileJSON() {
+    return JSON.stringify(fileState.words, null, 2);
+  }
+
+  /* ============================================================
+     FILE MODE — main flow
+     ============================================================ */
+  function handleFileSelected(file) {
+    if (!file) return;
+    if (!/^(video|audio)\//.test(file.type)) {
+      setFileStatus('error', 'Unsupported file type: ' + file.type);
+      return;
+    }
+    fileState.file = file;
+    fileState.audioFloat32 = null;
+    fileState.words = [];
+    fileState.blocks = [];
+    fileState.segments = [];
+
+    if (fileState.fileURL) URL.revokeObjectURL(fileState.fileURL);
+    fileState.fileURL = URL.createObjectURL(file);
+
+    fileEl.info.style.display = 'block';
+    fileEl.name.textContent = file.name;
+    fileEl.meta.textContent = ' · ' + humanSize(file.size) + ' · ' + (file.type || '?');
+
+    /* Load into preview player */
+    fileEl.player.src = fileState.fileURL;
+    fileEl.player.load();
+
+    fileEl.transcribeBtn.disabled = false;
+    setFileStatus('idle', 'Ready');
+    setFileProgress(0);
+    fileEl.previewCard.hidden = false;
+    fileEl.transcriptCard.hidden = true;
+    fileEl.assCard.hidden = true;
+    fileEl.exportCard.hidden = true;
+    fileEl.karaoke.innerHTML = '';
+    fileState.lastRenderKey = '';
+  }
+
+  async function handleTranscribe() {
+    if (!fileState.file || fileState.busy) return;
+    fileState.busy = true;
+    fileState.cancelRequested = false;
+    fileEl.transcribeBtn.disabled = true;
+    fileEl.cancelBtn.hidden = false;
+    setFileProgress(0);
+    setFileStatus('', 'Decoding audio…');
+    fileEl.transcriptCard.hidden = true;
+    fileEl.assCard.hidden = true;
+    fileEl.exportCard.hidden = true;
+
+    try {
+      if (!fileState.audioFloat32) {
+        fileState.audioFloat32 = await decodeTo16kMono(fileState.file);
+      }
+      if (fileState.cancelRequested) throw new Error('Cancelled');
+
+      var model = fileEl.model.value;
+      var language = fileEl.lang.value || undefined;
+      setFileStatus('', 'Loading model ' + model.split('/').pop() + '…');
+      setFileProgress(0);
+
+      var result = await transcribeViaWorker(fileState.audioFloat32, model, language);
+      if (fileState.cancelRequested) throw new Error('Cancelled');
+
+      var words = normalizeWhisperResult(result);
+      if (!words.length) throw new Error('No words detected — try a different model or check audio');
+
+      var opts = readAssOptions();
+      fileState.words = words;
+      fileState.blocks = buildBlocks(words, opts.wpc);
+      fileState.segments = buildSrtSegments(words, 7);
+
+      renderFileTranscript();
+      fileEl.transcriptCard.hidden = false;
+      fileEl.assCard.hidden = false;
+      fileEl.exportCard.hidden = false;
+      fileEl.previewCard.hidden = false;
+
+      fileState.lastRenderKey = '';
+      updateKaraokeFont();
+      startKaraokeLoop();
+
+      setFileStatus('listening', 'Done · ' + words.length + ' words · ' + fileState.segments.length + ' segments');
+      setFileProgress(100);
+    } catch (err) {
+      var msg = String((err && err.message) || err);
+      if (fileState.cancelRequested) setFileStatus('idle', 'Cancelled');
+      else setFileStatus('error', 'Failed: ' + msg);
+      console.error(err);
+    } finally {
+      fileState.busy = false;
+      fileEl.transcribeBtn.disabled = !fileState.file;
+      fileEl.cancelBtn.hidden = true;
+    }
+  }
+
+  /* Wire up file mode events */
+  fileEl.drop.addEventListener('click', function () { fileEl.input.click(); });
+  fileEl.input.addEventListener('change', function (e) { handleFileSelected(e.target.files && e.target.files[0]); });
+  ['dragenter','dragover'].forEach(function (n) {
+    fileEl.drop.addEventListener(n, function (e) { e.preventDefault(); fileEl.drop.classList.add('drag'); });
+  });
+  ['dragleave','drop'].forEach(function (n) {
+    fileEl.drop.addEventListener(n, function (e) { e.preventDefault(); fileEl.drop.classList.remove('drag'); });
+  });
+  fileEl.drop.addEventListener('drop', function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) handleFileSelected(f);
+  });
+  fileEl.transcribeBtn.addEventListener('click', handleTranscribe);
+  fileEl.cancelBtn.addEventListener('click', function () {
+    fileState.cancelRequested = true;
+    setFileStatus('idle', 'Cancelling…');
+  });
+
+  /* Karaoke options live update */
+  var karaokeOptsChanged = function () {
+    if (!fileState.words.length) return;
+    var opts = readAssOptions();
+    fileState.blocks = buildBlocks(fileState.words, opts.wpc);
+    fileState.lastRenderKey = '';
+  };
+  [fileEl.wpc, fileEl.font, fileEl.fs, fileEl.bord, fileEl.marginV, fileEl.marginLR,
+   fileEl.playres, fileEl.popIn, fileEl.popOut, fileEl.popExtra, fileEl.popBlur,
+   fileEl.tailHold].forEach(function (inp) {
+    inp.addEventListener('input', karaokeOptsChanged);
+  });
+  [fileEl.active, fileEl.inactive, fileEl.outline, fileEl.uppercase].forEach(function (inp) {
+    inp.addEventListener('input', karaokeOptsChanged);
+  });
+  /* Preview active color should follow the ASS "Active" picker */
+  fileEl.active.addEventListener('input', function () {
+    document.documentElement.style.setProperty('--pop', fileEl.active.value || '#FFB117');
+  });
+  document.documentElement.style.setProperty('--pop', fileEl.active.value || '#FFB117');
+
+  /* Video metadata → set stage aspect ratio */
+  fileEl.player.addEventListener('loadedmetadata', function () {
+    var v = fileEl.player;
+    if (v.videoWidth && v.videoHeight) {
+      fileEl.stage.style.aspectRatio = v.videoWidth + ' / ' + v.videoHeight;
+      /* Update default PlayRes to video dimensions */
+      if (!fileEl.playres.value || fileEl.playres.value === '1080x1920') {
+        fileEl.playres.value = v.videoWidth + 'x' + v.videoHeight;
+      }
+    }
+    updateKaraokeFont();
+  });
+  window.addEventListener('resize', updateKaraokeFont);
+
+  /* Export buttons */
+  fileEl.assBtn.addEventListener('click', function () {
+    if (!fileState.words.length) return;
+    var opts = readAssOptions();
+    downloadBlob('captions_' + fileStamp() + '.ass', buildAss(fileState.words, opts), 'text/x-ssa');
+  });
+  fileEl.srtBtn.addEventListener('click', function () {
+    if (!fileState.segments.length) return;
+    downloadBlob('captions_' + fileStamp() + '.srt', buildFileSRT(), 'application/x-subrip');
+  });
+  fileEl.vttBtn.addEventListener('click', function () {
+    if (!fileState.segments.length) return;
+    downloadBlob('captions_' + fileStamp() + '.vtt', buildFileVTT(), 'text/vtt');
+  });
+  fileEl.txtBtn.addEventListener('click', function () {
+    if (!fileState.segments.length) return;
+    downloadBlob('captions_' + fileStamp() + '.txt', buildFileTXT(), 'text/plain');
+  });
+  fileEl.jsonBtn.addEventListener('click', function () {
+    if (!fileState.words.length) return;
+    downloadBlob('words_' + fileStamp() + '.json', buildFileJSON(), 'application/json');
+  });
+
+  /* Clean up on unload */
+  window.addEventListener('beforeunload', function () {
+    liveState.active = false;
+    liveState.gen++;
+    stopTicker();
+    clearTimeout(liveState.timer);
+    if (liveState.rec) { try { liveState.rec.abort(); } catch (e) {} }
+    if (liveCap.stream) liveCap.stream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+    if (el.player.src) URL.revokeObjectURL(el.player.src);
+    if (fileState.fileURL) URL.revokeObjectURL(fileState.fileURL);
+    if (fileState.transcriberWorker) { try { fileState.transcriberWorker.terminate(); } catch (e) {} }
+    cancelAnimationFrame(fileState.karaokeRAF);
+  });
+
 })();
 </script>
 
